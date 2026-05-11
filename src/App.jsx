@@ -1,0 +1,1041 @@
+import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://rjcrywtpsjehobckrqjj.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-HuVy_kanJ9qo-KrSGXXlA_bPn1nx5J";
+
+/** 신청 저장용 — React 상태 기준( DOM 미동기·빈 RPC 응답 이슈 방지 ) */
+function buildApplicationPayloadFromState({ dong, ho, contractor, unitType, selectedList, total, signData }) {
+  const selected_options = selectedList.map((o) => ({
+    category: o.cat,
+    label: (o.label || o.name || "").trim(),
+    price: Number(o.price) || 0
+  }));
+  return {
+    receipt_no: `YYC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    customer_name: (contractor || "").trim() || "미입력",
+    phone: "",
+    dong: String(dong ?? "").replace(/\D/g, "") || "",
+    ho: String(ho ?? "").replace(/\D/g, "") || "",
+    unit_type: (unitType || "").trim() || "미입력",
+    selected_options,
+    total_price: Number(total) || 0,
+    signature_data_url: signData || "",
+    printed: true,
+    status: "접수됨"
+  };
+}
+
+async function saveApplicationToSupabase(payload) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_application`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`
+    },
+    body: JSON.stringify({ payload })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("Supabase RPC 신청 저장 실패:", errorText);
+    throw new Error(`[RPC submit_application] ${errorText || "Supabase 신청 저장 실패"}`);
+  }
+
+  const raw = await res.text();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+async function submitApplicationToAdmin(payload) {
+  await saveApplicationToSupabase(payload);
+  window.__yycApplicationSubmitted = true;
+}
+
+const ADMIN_SESSION_KEY = "yyc_admin_session";
+
+function getAdminSession() {
+  try {
+    return JSON.parse(localStorage.getItem(ADMIN_SESSION_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function setAdminSession(session) {
+  localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearAdminSession() {
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+async function supabaseAdminLogin(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY
+    },
+    body: JSON.stringify({ email, password })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("관리자 로그인 실패:", errorText);
+    throw new Error("로그인에 실패했습니다. 이메일/비밀번호를 확인해 주세요.");
+  }
+
+  return res.json();
+}
+
+async function adminFetchApplications() {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?select=*&order=created_at.desc`, {
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${session.access_token}`
+    }
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) clearAdminSession();
+    const errorText = await res.text();
+    console.error("접수 목록 조회 실패:", errorText);
+    throw new Error("접수 목록을 불러오지 못했습니다. 다시 로그인해 주세요.");
+  }
+
+  return res.json();
+}
+
+async function adminUpdateApplication(id, patch) {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${session.access_token}`,
+      "Prefer": "return=representation"
+    },
+    body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("접수 정보 수정 실패:", errorText);
+    throw new Error("접수 정보 수정에 실패했습니다.");
+  }
+
+  return res.json();
+}
+
+function installAdminStyles() {
+  if (document.getElementById("yyc-admin-style")) return;
+
+  const style = document.createElement("style");
+  style.id = "yyc-admin-style";
+  style.textContent = `.admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}.admin-shell{max-width:1200px;margin:0 auto}.admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.admin-title h1{font-size:2.5rem;font-weight:800;margin:0 0 .75rem;letter-spacing:-.03em;color:#fff}.admin-title p{font-size:1rem;opacity:.85;margin:0;color:#fff}.admin-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem}.admin-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08);border:0;box-sizing:border-box}.admin-login{width:min(440px,calc(100vw - 2rem));margin:12vh auto 0;text-align:left;overflow:hidden}.admin-login .admin-title{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;margin:-2rem -2rem 1.5rem;padding:2rem 1.5rem;border-radius:1rem 1rem 0 0}.admin-login .admin-title h1{font-size:1.75rem;margin:0 0 .5rem;color:#fff}.admin-login .admin-title p{font-size:.875rem;color:#fff;opacity:.85}.admin-field{display:flex;flex-direction:column;gap:.45rem;margin-bottom:1rem}.admin-field label{font-size:.875rem;font-weight:700;color:#1e3a5f}.admin-input,.admin-select,.admin-textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:.5rem;padding:.675rem .875rem;font-size:.9375rem;background:#fff;color:#1e293b;outline:none;transition:border-color .2s,box-shadow .2s}.admin-input:focus,.admin-select:focus,.admin-textarea:focus{border-color:#1e3a5f;box-shadow:0 0 0 3px rgba(30,58,95,.12)}.admin-textarea{min-height:100px;resize:vertical}.admin-btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:.5rem;background:#1e3a5f;color:#fff;font-size:.9375rem;font-weight:800;padding:.75rem 1.25rem;cursor:pointer;transition:background .2s,border-color .2s;text-decoration:none}.admin-btn:hover{background:#2c5282}.admin-btn.secondary{background:#fff;color:#475569;border:1px solid #cbd5e1}.admin-btn.secondary:hover{background:#f8fafc;border-color:#94a3b8}.admin-btn.danger{background:#991b1b;color:#fff}.admin-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto;gap:.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e2e8f0}.admin-layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:1rem;align-items:start}.admin-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}.admin-table{width:100%;border-collapse:collapse;min-width:820px}.admin-table th{background:#1e3a5f;color:#fff;text-align:left;font-size:.8125rem;padding:.75rem;white-space:nowrap;font-weight:700}.admin-table td{border-bottom:1px solid #e2e8f0;padding:.75rem;font-size:.875rem;vertical-align:middle}.admin-table tr{cursor:pointer;transition:background .15s}.admin-table tr:hover{background:#f8fafc}.admin-table tr.active{background:#eef2ff}.admin-badge{display:inline-block;border-radius:2rem;padding:.25rem .75rem;font-size:.75rem;font-weight:800;background:#e0f2fe;color:#075985;white-space:nowrap}.admin-badge.done{background:#dcfce7;color:#166534}.admin-badge.cancel{background:#fee2e2;color:#991b1b}.admin-price{text-align:right;font-weight:800;color:#1e3a5f;white-space:nowrap}.admin-detail{position:sticky;top:1rem}.admin-detail-empty{text-align:center;color:#94a3b8;padding:3rem 1rem}.admin-detail h2{font-size:1.125rem;color:#1e3a5f;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}.admin-kv{display:grid;grid-template-columns:90px 1fr;gap:.5rem .75rem;font-size:.875rem;margin-bottom:1rem}.admin-kv b{color:#64748b}.admin-options{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:.5rem 0;margin:1rem 0;max-height:240px;overflow:auto}.admin-option{display:flex;justify-content:space-between;gap:.75rem;font-size:.8125rem;padding:.5rem 0;border-bottom:1px dashed #e2e8f0}.admin-option:last-child{border-bottom:0}.admin-sign{max-width:180px;max-height:80px;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;display:block;margin-top:.5rem}.admin-error{color:#b91c1c;font-size:.875rem;margin-top:.75rem;white-space:pre-wrap}.admin-loading{color:#64748b;font-size:.875rem;margin:.75rem 0}@media(max-width:900px){.admin-filters{grid-template-columns:1fr 1fr}.admin-layout{grid-template-columns:1fr}.admin-detail{position:static}.admin-title h1{font-size:1.75rem}.admin-top{padding:2rem 1rem}.admin-actions{margin-top:1rem}}`;
+  document.head.appendChild(style);
+}
+
+function formatAdminDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+}
+
+function formatAdminPrice(value) {
+  return `${Number(value || 0).toLocaleString("ko-KR")}원`;
+}
+
+function statusClass(status) {
+  if (status === "계약완료") return "done";
+  if (status === "취소") return "cancel";
+  return "";
+}
+
+function csvEscape(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadApplicationsCsv(rows) {
+  const header = ["접수번호","접수일시","고객명","동","호","타입","총액","상태","메모"];
+  const body = rows.map((r) => [
+    r.receipt_no,
+    formatAdminDate(r.created_at),
+    r.customer_name,
+    r.dong,
+    r.ho,
+    r.unit_type,
+    r.total_price,
+    r.status,
+    r.admin_memo
+  ].map(csvEscape).join(","));
+
+  const blob = new Blob(["﻿" + [header.map(csvEscape).join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `요진와이시티_옵션신청_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function isAdminRoute() {
+  const hash = (window.location.hash || "").toLowerCase();
+  const path = (window.location.pathname || "").toLowerCase();
+  return hash.startsWith("#admin") || path.endsWith("/admin") || path.includes("/admin/");
+}
+
+export function renderAdminDashboardIfNeeded() {
+  if (!isAdminRoute()) return;
+
+  installAdminStyles();
+
+  const root = document.getElementById("root");
+  if (!root) return;
+
+  root.innerHTML = `<div class="admin-wrap"><div class="admin-shell" id="yyc-admin-shell"></div></div>`;
+  const shell = document.getElementById("yyc-admin-shell");
+
+  const renderLogin = (message = "") => {
+    shell.innerHTML = `<div class="admin-card admin-login"><div class="admin-title"><h1>관리자 로그인</h1><p>청량리역 요진 와이시티 옵션 신청 접수 관리</p></div><form id="admin-login-form"><div class="admin-field"><label>이메일</label><input class="admin-input" name="email" type="email" autocomplete="email" placeholder="관리자 이메일" required /></div><div class="admin-field"><label>비밀번호</label><input class="admin-input" name="password" type="password" autocomplete="current-password" placeholder="비밀번호" required /></div><button class="admin-btn" style="width:100%" type="submit">로그인</button>${message ? `<div class="admin-error">${message}</div>` : ""}</form></div>`;
+
+    document.getElementById("admin-login-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const btn = form.querySelector("button");
+      btn.disabled = true;
+      btn.textContent = "로그인 중...";
+
+      try {
+        const session = await supabaseAdminLogin(form.email.value, form.password.value);
+        setAdminSession(session);
+        await renderList();
+      } catch (err) {
+        renderLogin(err.message || "로그인에 실패했습니다.");
+      }
+    });
+  };
+
+  const renderList = async () => {
+    if (!getAdminSession()?.access_token) {
+      renderLogin();
+      return;
+    }
+
+    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.</p></div><div class="admin-actions"><button class="admin-btn secondary" id="admin-refresh">새로고침</button><button class="admin-btn secondary" id="admin-csv">CSV 다운로드</button><button class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
+
+    document.getElementById("admin-logout").onclick = () => {
+      clearAdminSession();
+      renderLogin();
+    };
+
+    try {
+      const rows = await adminFetchApplications();
+      let filtered = [...rows];
+      let selected = filtered[0] || null;
+
+      const renderRows = () => {
+        const keyword = (document.getElementById("admin-search")?.value || "").trim().toLowerCase();
+        const status = document.getElementById("admin-status-filter")?.value || "";
+        const unitType = document.getElementById("admin-type-filter")?.value || "";
+        const dong = (document.getElementById("admin-dong-filter")?.value || "").trim();
+
+        filtered = rows.filter((row) => {
+          const haystack = [row.receipt_no,row.customer_name,row.dong,row.ho,row.unit_type,row.status].join(" ").toLowerCase();
+          return (!keyword || haystack.includes(keyword)) &&
+            (!status || row.status === status) &&
+            (!unitType || row.unit_type === unitType) &&
+            (!dong || String(row.dong || "").includes(dong));
+        });
+
+        if (selected && !filtered.some((r) => r.id === selected.id)) selected = filtered[0] || null;
+
+        const typeOptions = Array.from(new Set(rows.map((r) => r.unit_type).filter(Boolean)))
+          .map((t) => `<option value="${t}">${t}</option>`).join("");
+
+        document.querySelector(".admin-card").innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/접수번호 검색" value="${keyword}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dong}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button class="admin-btn secondary" id="admin-filter-reset">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수일시</th><th>고객명</th><th>동/호</th><th>타입</th><th>총액</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
+                    <tr data-id="${r.id}" class="${selected?.id === r.id ? "active" : ""}">
+                      <td>${formatAdminDate(r.created_at)}</td>
+                      <td><b>${r.customer_name || "-"}</b><br><span style="color:#94a3b8;font-size:11px">${r.receipt_no || ""}</span></td>
+                      <td>${r.dong || "-"}동 ${r.ho || "-"}호</td>
+                      <td>${r.unit_type || "-"}</td>
+                      <td class="admin-price">${formatAdminPrice(r.total_price)}</td>
+                      <td><span class="admin-badge ${statusClass(r.status)}">${r.status || "접수됨"}</span></td>
+                    </tr>
+                  `).join("") || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">접수 기록이 없습니다.</td></tr>`}</tbody></table></div><div class="admin-card admin-detail" id="admin-detail"></div></div>`;
+
+        if (unitType) document.getElementById("admin-type-filter").value = unitType;
+        if (status) document.getElementById("admin-status-filter").value = status;
+
+        ["admin-search","admin-dong-filter","admin-type-filter","admin-status-filter"].forEach((id) => {
+          document.getElementById(id).addEventListener("input", renderRows);
+          document.getElementById(id).addEventListener("change", renderRows);
+        });
+
+        document.getElementById("admin-filter-reset").onclick = () => {
+          document.getElementById("admin-search").value = "";
+          document.getElementById("admin-dong-filter").value = "";
+          document.getElementById("admin-type-filter").value = "";
+          document.getElementById("admin-status-filter").value = "";
+          selected = rows[0] || null;
+          renderRows();
+        };
+
+        document.querySelectorAll(".admin-table tbody tr[data-id]").forEach((tr) => {
+          tr.onclick = () => {
+            selected = rows.find((r) => r.id === tr.dataset.id);
+            renderRows();
+          };
+        });
+
+        renderDetail();
+      };
+
+      const renderDetail = () => {
+        const box = document.getElementById("admin-detail");
+        if (!selected) {
+          box.innerHTML = `<div class="admin-detail-empty">접수 항목을 선택하세요.</div>`;
+          return;
+        }
+
+        const options = Array.isArray(selected.selected_options) ? selected.selected_options : [];
+
+        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
+              <div class="admin-option">
+                <span><b>${o.category || "-"}</b><br>${o.label || o.name || "-"}</span>
+                <b>${formatAdminPrice(o.price)}</b>
+              </div>
+            `).join("") || `<div style="color:#94a3b8;font-size:13px">선택 옵션 없음</div>`}</div><div class="admin-field"><label>서명</label>${selected.signature_data_url ? `<img class="admin-sign" src="${selected.signature_data_url}" alt="서명" />` : `<span style="color:#94a3b8;font-size:13px">서명 없음</span>`}</div><div class="admin-field"><label>관리자 메모</label><textarea class="admin-textarea" id="admin-detail-memo" placeholder="확인 내용이나 특이사항을 입력하세요.">${selected.admin_memo || ""}</textarea></div><button class="admin-btn" id="admin-detail-save" style="width:100%">상태/메모 저장</button><div id="admin-detail-msg" class="admin-loading"></div>`;
+
+        document.getElementById("admin-detail-status").value = selected.status || "접수됨";
+
+        document.getElementById("admin-detail-save").onclick = async () => {
+          const msg = document.getElementById("admin-detail-msg");
+          msg.textContent = "저장 중...";
+
+          try {
+            const patch = {
+              status: document.getElementById("admin-detail-status").value,
+              admin_memo: document.getElementById("admin-detail-memo").value
+            };
+            const updated = (await adminUpdateApplication(selected.id, patch))[0];
+            Object.assign(selected, updated || patch);
+            const original = rows.find((r) => r.id === selected.id);
+            if (original) Object.assign(original, selected);
+            msg.textContent = "저장되었습니다.";
+            renderRows();
+          } catch (err) {
+            msg.innerHTML = `<span class="admin-error">${err.message || "저장 실패"}</span>`;
+          }
+        };
+      };
+
+      shell.querySelector("#admin-refresh").onclick = renderList;
+      shell.querySelector("#admin-csv").onclick = () => downloadApplicationsCsv(filtered.length ? filtered : rows);
+
+      renderRows();
+    } catch (err) {
+      renderLogin(err.message || "관리자 화면을 불러오지 못했습니다.");
+    }
+  };
+
+  renderList();
+}
+
+window.addEventListener("hashchange", () => {
+  if (isAdminRoute()) renderAdminDashboardIfNeeded();
+  else window.location.reload();
+});
+
+setTimeout(renderAdminDashboardIfNeeded, 0);
+
+const TYPES = [
+  {key:'43',name:'43㎡',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
+  ],ac:4700000,vent:600000,dual:false,floorPlan:'https://i.imgur.com/HiJ8Nbn.png',fridgeBaseImg:'https://i.imgur.com/FrICl3o.png',fridgeImg:'https://i.imgur.com/mHj5GjG.png'},
+  {key:'48A',name:'48㎡A',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
+  ],ac:5800000,vent:600000,dual:false,floorPlan:'https://i.imgur.com/ThftPeK.png',fridgeBaseImg:'https://i.imgur.com/Wwqgatz.png',fridgeImg:'https://i.imgur.com/CUL8p92.png'},
+  {key:'48B',name:'48㎡B',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'52A',name:'52㎡A',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:4700000,vent:600000,dual:false},
+  {key:'52B',name:'52㎡B',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2100000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'침실3 가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'52C',name:'52㎡C',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:4700000,vent:600000,dual:false},
+  {key:'55A',name:'55㎡A',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가변형벽체(침실1/침실3 통합형)+가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'55B',name:'55㎡B',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(여닫이)',base:'',price:1600000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'침실3 가구도어+시스템선반+화장대+주방 수납장',base:'',price:4100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'59A',name:'59㎡A',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3400000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4200000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 톤에서 미세한 차이가 발생할 수 있으며, 타일 나누기는 추가 또는 변경될 수 있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생하며 제조과정에 따라 건별 주택에 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈의 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300, 가로방향) + 상판 인조대리석',price:4500000,baseImg:'https://i.imgur.com/y8vaEXd.png',img:'https://i.imgur.com/ukypmcj.png',notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000,baseImg:'https://i.imgur.com/NMrqttd.png',img:'https://i.imgur.com/Q3MsWer.png'},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59A',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합)+가구도어+시스템선반',base:'',price:1200000,baseImg:'https://i.imgur.com/lMFgSQC.png',img:'https://i.imgur.com/APPHDdE.png',group:'g59A',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']},
+  ],ac:6400000,vent:1200000,dual:true,floorPlan:'https://i.imgur.com/UW6y8Yf.png'},
+  {key:'59B',name:'59㎡B',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3300000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:3800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59B',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1200000,group:'g59B',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'59C',name:'59㎡C',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2800000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 화장대+수납장(장식장)+드레스룸도어+시스템선반',base:'',price:5300000},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59C',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1300000,group:'g59C',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'59D',name:'59㎡D',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2800000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)+화장대',base:'',price:6800000},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59D',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1300000,group:'g59D',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'59E',name:'59㎡E',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2500000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4600000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4600000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:5000000},
+    {id:'closet_침실3',cat:'붙박이장',label:'침실3 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실3 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'59F',name:'59㎡F',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3000000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2200000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000},
+    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'65A',name:'65㎡A',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2100000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'실1 가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'65B',name:'65㎡B',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:4700000,vent:600000,dual:false},
+  {key:'68',name:'68㎡',opts:[
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(여닫이)',base:'',price:1600000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'실3 가구도어+시스템선반+화장대+주방 수납장',base:'',price:4100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
+  ],ac:5800000,vent:600000,dual:false},
+  {key:'79',name:'79㎡',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3300000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:3800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(슬라이딩)',base:'',price:3900000},
+    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:1700000,group:'g79',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장, 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 공간특화(드레스룸) 옵션 선택시 침실2 붙박이장 옵션 선택 불가하니 참고 바랍니다']},
+    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(실2/실3 통합형)+가구도어+시스템선반',base:'',price:1200000,group:'g79',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+  {key:'84',name:'84㎡',opts:[
+    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2500000},
+    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4600000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
+    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
+    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4600000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
+    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(슬라이딩)',base:'',price:5000000},
+    {id:'closet_실3',cat:'붙박이장',label:'실3 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장, 실3 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
+  ],ac:6400000,vent:1200000,dual:true},
+];
+
+function getAppliances(t) {
+  const list = [
+    {id:'a_ind',name:'3구 인덕션',model:'하츠 SSIH-3605TTLB',base:'가스쿡탑',price:400000},
+    {id:'a_oven',name:'빌트인오븐',model:'삼성 NQ36A6555CK',base:'가구(여닫이장)',price:500000},
+    {id:'a_dish',name:'식기세척기',model:'삼성 DW80F71Y1SEW',base:'가구(여닫이장)',price:1200000},
+    {id:'a_ac',name:'시스템에어컨',model:'LG',base:'-',price:t.ac,note:'*거실 및 침실'},
+    {id:'a_vent',name:'스마트복합환풍기',model:'힘펠 FHD3-C150P',base:'-',price:t.vent,note:t.vent>600000?'욕실 2개소':''},
+    {id:'a_fr',name:'냉장고패키지',model:'냉장고: 삼성 RR40C7995AP / 냉동고: 삼성 RZ34C7965AP / 김치냉장고: 삼성 RQ34C7945AP',base:'-',price:7300000,baseImg:t.fridgeBaseImg||'https://i.imgur.com/N4lwIZD.png',img:t.fridgeImg||'https://i.imgur.com/wFVmKCn.png',
+      appNotes:[
+        '※ 가전옵션 제품은 2025년 10월 기준으로 설치시점에 해당 모델의 단종(성능 개선, 디자인 변경, 기술적 사항 변경 등의 사유) 혹은 품절, 품귀 등의 사유 발생 시 동종사의 동종, 등급 이상의 제품으로 변경 제공될 수 있습니다.',
+        '※ 천정형 시스템 에어컨 설치 위치는 현장 여건에 따라 견본주택에 설치된 위치와 상이할 수 있습니다.',
+        '※ 식기세척기는 가구도어로 마감될 예정입니다.',
+        '※ 냉장고패키지 선택시 냉장, 냉동, 김치순으로 배열되며 순서는 고정이며, 냉장고 도어방향은 설치 위치에 따라 다를 수 있습니다.',
+        '※ 냉장고 상부장 및 열면(좌측 또는 우측) 수납장의 도어방향은 설치 위치에 따라 다를 수 있습니다.',
+        '※ 견본주택에 설치된 비스포크 냉장고 패널색상은 예시 색상이며, 전면패널의 색상은 1년 단위로 변경되므로 입주 6개월 전 별도의 안내를 드릴 예정입니다.',
+        '※ 관련 법규 개정 또는 검사기준에 따라 가전제품의 에너지소비효율등급은 매년 변경될 수 있습니다.',
+        '※ 주방환경(주방가구 연장 및 아일랜드장) 옵션 미선택 시 빌트인 가전선택의 제한이 있을 수 있으니 유의하시기 바랍니다.'
+      ]},
+  ];
+  if (t.dual) {
+    list.push({id:'a_bt1',name:'욕실1 비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
+    list.push({id:'a_bd1',name:'욕실1 비데',model:'대림통상 DB-4210',base:'-',price:200000});
+    list.push({id:'a_bt2',name:'욕실2 비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
+    list.push({id:'a_bd2',name:'욕실2 비데',model:'대림통상 DB-4210',base:'-',price:200000});
+  } else {
+    list.push({id:'a_bt',name:'비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
+    list.push({id:'a_bd',name:'비데',model:'대림통상 DB-4210',base:'-',price:200000});
+  }
+  return list;
+}
+
+const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
+
+function ApplicationForm59A({typeData,sel,signData,contractor,dong,ho}){
+  if(!typeData) return null;
+  const f=(n)=>String.fromCharCode(8361)+n.toLocaleString('ko-KR');
+  const on=(id)=>sel[id]!==undefined;
+  const Seal=({active})=>(
+    <span className="af-seal">(인){active&&signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
+  );
+  const TextOpt=({opt})=>{
+    const s=on(opt.id);
+    return(
+      <div className="afs">
+        <div className="afs-t">{opt.cat} 옵션 선택</div>
+        <table className="aft"><thead><tr>
+          <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
+          <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
+        </tr></thead><tbody>
+          <tr><td>{opt.base||'—'}</td><td>{opt.label}</td></tr>
+          <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
+          <tr><td className="af-st">계약자: <Seal active={!s}/></td><td className="af-st">계약자: <Seal active={s}/></td></tr>
+        </tbody></table>
+        {opt.notes&&<div className="af-notes">{opt.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
+      </div>
+    );
+  };
+  const ImgOpt=({opt})=>{
+    const s=on(opt.id);
+    return(
+      <div className="afs">
+        <div className="afs-t">{opt.cat} 옵션 선택</div>
+        <table className="aft"><thead><tr>
+          <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
+          <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
+        </tr></thead><tbody>
+          {(opt.baseImg||opt.img)&&<tr>
+            <td className="af-tc">{opt.baseImg?<img src={opt.baseImg} className="af-fw"/>:'—'}</td>
+            <td className="af-tc">{opt.img?<img src={opt.img} className="af-fw"/>:'—'}</td>
+          </tr>}
+          <tr><td>{opt.base||'—'}</td><td>{opt.label}</td></tr>
+          <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
+          <tr><td className="af-st">계약자: <Seal active={!s}/></td><td className="af-st">계약자: <Seal active={s}/></td></tr>
+        </tbody></table>
+        {opt.notes&&<div className="af-notes">{opt.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
+      </div>
+    );
+  };
+  const AppRow=({it})=>{
+    const s=on(it.id);
+    return(
+      <React.Fragment key={it.id}>
+        <tr><td rowSpan={2}><div style={ {fontWeight:600} }>{it.name}</div><div style={ {fontSize:'6.5pt',color:'#666'} }>({it.model})</div></td>
+          <td><span className="af-lb">미선택형</span> {it.base||'—'}</td>
+          <td className="af-st">계약자: <Seal active={!s}/></td></tr>
+        <tr><td><span className="af-ls">선택형</span> 공급금액: {f(it.price)}{it.note&&<span style={ {fontSize:'6pt',color:'#c00',marginLeft:'1mm'} }>{it.note}</span>}</td>
+          <td className="af-st">계약자: <Seal active={s}/></td></tr>
+      </React.Fragment>
+    );
+  };
+  const w=typeData.opts.find(o=>o.id==='wall');
+  const l=typeData.opts.find(o=>o.id==='living');
+  const b=typeData.opts.find(o=>o.id==='bath');
+  const k=typeData.opts.find(o=>o.id==='kitchen');
+  const c1=typeData.opts.find(o=>o.id==='closet_침실1');
+  const c2=typeData.opts.find(o=>o.id==='closet_침실2');
+  const sp=typeData.opts.find(o=>o.id==='space');
+  const bathApps=typeData.dual?[
+    {id:'a_bt1',name:'욕실1 비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
+    {id:'a_bd1',name:'욕실1 비데',model:'대림통상 DB-4210',base:'—',price:200000},
+    {id:'a_bt2',name:'욕실2 비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
+    {id:'a_bd2',name:'욕실2 비데',model:'대림통상 DB-4210',base:'—',price:200000}
+  ]:[
+    {id:'a_bt',name:'비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
+    {id:'a_bd',name:'비데',model:'대림통상 DB-4210',base:'—',price:200000}
+  ];
+  const kitApps=[
+    {id:'a_ind',name:'3구 인덕션',model:'하츠 SSIH-3605TTLB',base:'가스쿡탑',price:400000},
+    {id:'a_oven',name:'빌트인오븐',model:'삼성 NQ36A6555CK',base:'가구(여닫이장)',price:500000},
+    {id:'a_dish',name:'식기세척기',model:'삼성 DW80F71Y1SEW',base:'가구(여닫이장)',price:1200000},
+    {id:'a_ac',name:'시스템에어컨',model:'LG',base:'—',price:typeData.ac,note:'*거실 및 침실'},
+    {id:'a_vent',name:'스마트복합환풍기',model:'힘펠 FHD3-C150P',base:'—',price:typeData.vent,note:typeData.vent>600000?'욕실 2개소':''}
+  ];
+  const now=new Date();
+  const dateStr=now.getFullYear()+'. '+(now.getMonth()+1)+'. '+now.getDate()+'.';
+  return(
+    <div className="app-form-print">
+      <div className="afp afp-1">
+        <div className="afc">
+          <div className="afs-t">가전 옵션 선택 품목</div>
+          <table className="af-at"><thead><tr><th style={ {width:'28%'} }>품목</th><th>미선택형 / 선택형</th><th style={ {width:'18%'} }>계약자 확인</th></tr></thead><tbody>
+            <tr><td rowSpan={2}><div style={ {fontWeight:600} }>냉장고패키지</div><div className="af-sg2">냉장고: 삼성 RR40C7995AP<br/>냉동고: 삼성 RZ34C7965AP<br/>김치냉장고: 삼성 RQ34C7945AP</div></td>
+              <td><span className="af-lb">미선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/N4lwIZD.png"/><div className="af-pr">—</div></td>
+              <td className="af-st">계약자: <Seal active={!on('a_fr')}/></td></tr>
+            <tr><td><span className="af-ls">선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/wFVmKCn.png"/><div className="af-pr">공급금액: {f(7300000)}</div></td>
+              <td className="af-st">계약자: <Seal active={on('a_fr')}/></td></tr>
+            {bathApps.map(it=><AppRow key={it.id} it={it}/>)}
+          </tbody></table>
+          <div className="af-notes">※ 가전옵션 제품은 설치시점에 단종 등 사유로 동등 이상 제품 변경 가능<br/>※ 냉장고패키지 선택시 냉장/냉동/김치 순 배열 고정, 도어방향은 설치 위치에 따라 다를 수 있음</div>
+        </div>
+        <div className="afc">
+          <div className="af-hdr">
+            <div className="af-hdr-nm">{typeData.name}</div>
+            <div className="af-hdr-sub">청량리역 요진 와이시티<br/>멀티플러스 옵션 신청서</div>
+            <div className="af-hdr-info"><div className="af-hdr-cell">{dong||'___'}동</div><div className="af-hdr-cell">{ho||'___'}호</div></div>
+          </div>
+          {typeData.floorPlan&&<div className="af-fp"><img src={typeData.floorPlan} alt="평면도"/></div>}
+          {w&&<TextOpt opt={w}/>}
+          {l&&<TextOpt opt={l}/>}
+          {b&&<TextOpt opt={b}/>}
+        </div>
+      </div>
+      <div className="afp afp-2">
+        <div className="afc">
+          {k&&<ImgOpt opt={k}/>}
+          <div className="afs">
+            <div className="afs-t">붙박이장 옵션 선택</div>
+            <table className="aft"><thead><tr>
+              <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
+              <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
+            </tr></thead><tbody>
+              {c1&&<React.Fragment><tr>
+                <td className="af-tc">{c1.baseImg?<img src={c1.baseImg} className="af-fw"/>:'—'}</td>
+                <td className="af-tc">{c1.img?<img src={c1.img} className="af-fw"/>:'—'}</td>
+              </tr><tr><td>—</td><td>{c1.label}</td></tr>
+              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c1.price)}</td></tr>
+              <tr><td className="af-st">계약자: <Seal active={!on(c1.id)}/></td><td className="af-st">계약자: <Seal active={on(c1.id)}/></td></tr>
+              </React.Fragment>}
+              {c2&&<React.Fragment><tr style={ {borderTop:'1pt solid #666'} }><td>—</td><td>{c2.label}</td></tr>
+              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c2.price)}</td></tr>
+              <tr><td className="af-st">계약자: <Seal active={!on(c2.id)}/></td><td className="af-st">계약자: <Seal active={on(c2.id)}/></td></tr>
+              </React.Fragment>}
+            </tbody></table>
+            {c2&&c2.notes&&<div className="af-notes">{c2.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
+          </div>
+        </div>
+        <div className="afc">
+          {sp&&<ImgOpt opt={sp}/>}
+          <div className="afs-t">가전 옵션 선택 품목</div>
+          <table className="af-at"><thead><tr><th style={ {width:'28%'} }>품목</th><th>미선택형 / 선택형</th><th style={ {width:'18%'} }>계약자 확인</th></tr></thead><tbody>
+            {kitApps.map(it=><AppRow key={it.id} it={it}/>)}
+          </tbody></table>
+          <div className="af-tc" style={ {marginTop:'4mm',fontSize:'8pt',color:'#475569'} }>
+            <div style={ {marginBottom:'1mm'} }>상기 옵션을 신청합니다.</div>
+            <div className="af-b" style={ {fontSize:'9pt'} }>계약자: {contractor} <span className="af-seal" style={ {marginLeft:'2mm'} }>(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span></div>
+            <div style={ {color:'#64748b',fontSize:'8pt',marginTop:'1mm'} }>{dateStr}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function App() {
+  const [step, setStep] = useState(0);
+  const [dong, setDong] = useState('');
+  const [ho, setHo] = useState('');
+  const [contractor, setContractor] = useState('');
+  const [typeKey, setTypeKey] = useState('');
+  const [sel, setSel] = useState({});
+  const [signData, setSignData] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
+  const canvasRef = useRef(null);
+  const isDrawing = useRef(false);
+  const hasDraw = useRef(false);
+
+  /** 인쇄 미리보기(WebKit): html에 표식을 두고 @media print에서 visibility 방식으로만 숨김 */
+  useEffect(() => {
+    const root = document.documentElement;
+    if (step !== 2) {
+      root.classList.remove("yyc-print-source-page");
+      return;
+    }
+    root.classList.add("yyc-print-source-page");
+    const reflow = () => {
+      void document.body.offsetHeight;
+    };
+    window.addEventListener("beforeprint", reflow);
+    return () => {
+      window.removeEventListener("beforeprint", reflow);
+      root.classList.remove("yyc-print-source-page");
+    };
+  }, [step]);
+
+  const startDraw = useCallback((e) => {
+    const canvas = canvasRef.current; if(!canvas) return;
+    isDrawing.current = true; hasDraw.current = true;
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    const ctx = canvas.getContext('2d');
+    ctx.beginPath(); ctx.moveTo(t.clientX-rect.left, t.clientY-rect.top);
+    canvas.parentElement.classList.add('signed');
+  },[]);
+  const moveDraw = useCallback((e) => {
+    if(!isDrawing.current) return;
+    const canvas = canvasRef.current; if(!canvas) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches ? e.touches[0] : e;
+    const ctx = canvas.getContext('2d');
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#1e293b';
+    ctx.lineTo(t.clientX-rect.left, t.clientY-rect.top); ctx.stroke();
+  },[]);
+  const endDraw = useCallback(() => {
+    isDrawing.current = false;
+  },[]);
+  const confirmSign = useCallback(() => {
+    const canvas = canvasRef.current;
+    if(!canvas || !hasDraw.current) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    const data = ctx.getImageData(0,0,w,h).data;
+    let minX=w, minY=h, maxX=-1, maxY=-1;
+    for(let y=0; y<h; y++){
+      for(let x=0; x<w; x++){
+        if(data[(y*w+x)*4+3] > 0){
+          if(x<minX) minX=x;
+          if(x>maxX) maxX=x;
+          if(y<minY) minY=y;
+          if(y>maxY) maxY=y;
+        }
+      }
+    }
+    if(maxX < 0){ setSignData(null); return; }
+    const pad = 8;
+    minX = Math.max(0, minX-pad);
+    minY = Math.max(0, minY-pad);
+    maxX = Math.min(w-1, maxX+pad);
+    maxY = Math.min(h-1, maxY+pad);
+    const cw = maxX-minX+1, ch = maxY-minY+1;
+    const crop = document.createElement('canvas');
+    crop.width = cw; crop.height = ch;
+    crop.getContext('2d').drawImage(canvas, minX, minY, cw, ch, 0, 0, cw, ch);
+    setSignData(crop.toDataURL('image/png'));
+  },[]);
+  const clearSign = useCallback(() => {
+    const canvas = canvasRef.current;
+    if(canvas){
+      const w = canvas.width, h = canvas.height;
+      canvas.width = w; canvas.height = h;
+      if(canvas.parentElement) canvas.parentElement.classList.remove('signed');
+    }
+    isDrawing.current = false;
+    hasDraw.current = false;
+    setSignData(null);
+  },[]);
+
+  const typeData = useMemo(() => TYPES.find(t => t.key === typeKey), [typeKey]);
+  const allOpts = useMemo(() => {
+    if (!typeData) return [];
+    return [...typeData.opts, ...getAppliances(typeData).map(a => ({...a, cat:'가전 옵션', label: a.name}))];
+  }, [typeData]);
+  const total = useMemo(() => Object.values(sel).reduce((s, v) => s + v, 0), [sel]);
+
+  const onSubmitComplete = useCallback(async () => {
+    if (!signData || submitting || !typeData) return;
+    setSubmitResult(null);
+    setSubmitting(true);
+    const list = allOpts.filter((o) => sel[o.id] !== undefined);
+    const sum = Object.values(sel).reduce((s, v) => s + v, 0);
+    try {
+      const payload = buildApplicationPayloadFromState({
+        dong,
+        ho,
+        contractor,
+        unitType: typeData.name,
+        selectedList: list,
+        total: sum,
+        signData
+      });
+      await submitApplicationToAdmin(payload);
+      const okMsg =
+        "신청이 접수되었습니다. 담당자가 관리자 화면에서 확인합니다. 인쇄가 필요하면 「인쇄하기」를 눌러 주세요.";
+      setSubmitResult({ ok: true, message: okMsg });
+      window.alert("신청이 완료되었습니다.\n접수 내역은 관리자에서 확인합니다.");
+    } catch (err) {
+      console.error(err);
+      const msg = err?.message || "저장에 실패했습니다.";
+      setSubmitResult({ ok: false, message: msg });
+      window.alert(`신청 정보 저장에 실패했습니다.\n\n${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [signData, submitting, typeData, allOpts, sel, dong, ho, contractor, signData]);
+
+  const toggle = (id) => {
+    setSel(prev => {
+      const next = {...prev};
+      const opt = allOpts.find(o => o.id === id);
+      if (!opt) return prev;
+      if (next[id] !== undefined) { delete next[id]; }
+      else {
+        if (opt.group) allOpts.filter(o => o.group === opt.group && o.id !== id).forEach(o => delete next[o.id]);
+        next[id] = opt.price;
+      }
+      return next;
+    });
+  };
+
+  const resetType = (key) => { setTypeKey(key); setSel({}); };
+  const selectedList = allOpts.filter(o => sel[o.id] !== undefined);
+
+  if (step === 0) {
+    return (
+      <div className="container">
+        <header className="hero">
+          <h1 className="hero-title">청량리역 요진 와이시티</h1>
+          <p className="hero-sub">멀티플러스 옵션 전자 신청 시스템</p>
+        </header>
+        <div className="form-card">
+          <h2 className="section-title">계약자 정보</h2>
+          <div className="form-row"><label>동</label><input type="text" value={dong} onChange={e=>setDong(e.target.value)} placeholder="예: 101" /></div>
+          <div className="form-row"><label>호</label><input type="text" value={ho} onChange={e=>setHo(e.target.value)} placeholder="예: 1201" /></div>
+          <div className="form-row"><label>계약자명</label><input type="text" value={contractor} onChange={e=>setContractor(e.target.value)} placeholder="이름 입력" /></div>
+          <h2 className="section-title">평형 선택</h2>
+          <div className="type-grid">
+            {TYPES.map(t => <button key={t.key} className={'type-btn'+(typeKey===t.key?' active':'')} onClick={()=>resetType(t.key)}>{t.name}</button>)}
+          </div>
+          <div className="entry-actions">
+            <button className="primary-btn" disabled={!typeKey||!dong||!ho||!contractor} onClick={()=>setStep(1)}>옵션 계약 신청 &rarr;</button>
+            <button className="secondary-btn" disabled={!typeKey||!dong||!ho||!contractor} onClick={()=>setStep(1)}>옵션 계약 변경 신청 &rarr;</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 1) {
+    const cats = []; const catMap = {};
+    allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];cats.push(o.cat);} catMap[o.cat].push(o); });
+    return (
+      <div className="container">
+        <header className="header-bar">
+          <span className="header-info">{typeData.name} | {dong}동 {ho}호 | {contractor}</span>
+          <span className="header-total">합계: {fmt(total)}</span>
+        </header>
+        <div className="plan-box">{typeData.floorPlan?<img src={typeData.floorPlan} alt={typeData.name}/>:<div className="plan-ph"><span>🏠</span>{typeData.name} 평면도</div>}</div>
+        <div className="option-layout">
+          <div className="option-main">
+            {cats.map(cat => {
+              if (cat === '가전 옵션') {
+                const allApps = catMap[cat];
+                return (
+                  <div key={cat} className="cat-section">
+                    <h2 className="cat-title">{cat}</h2>
+                    <div className="app-table">
+                      <div className="app-head"><span>품목</span><span>미선택형 / 선택형</span><span>선택</span></div>
+                      {allApps.map(opt => {
+                        const isOn = sel[opt.id] !== undefined;
+                        if (opt.baseImg||opt.img) {
+                          return (
+                            <div key={opt.id} className={'app-item'+(isOn?' on':'')}>
+                              <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
+                              <div className="cmp-imgs"><div className="cmp-img">{opt.baseImg?<img src={opt.baseImg} alt="미선택형"/>:<div className="img-ph">📷</div>}</div><div className="cmp-img">{opt.img?<img src={opt.img} alt="선택형"/>:<div className="img-ph">📷</div>}</div></div>
+                              <div className="cmp-cols">
+                                <div className="cmp-col"><div className="cmp-desc">미선택형</div><div className="cmp-dash">–</div></div>
+                                <div className="cmp-col"><div style={ {fontWeight:700,marginBottom:'.25rem'} }>{opt.name}</div>{opt.model&&<div style={ {fontSize:'.75rem',color:'#64748b',marginBottom:'.5rem'} }>{opt.model}</div>}<div className="cmp-desc">선택형</div><div className="cmp-price">공급금액 : {fmt(opt.price)}</div><div style={ {marginTop:'.5rem',textAlign:'right'} }><button className={'toggle-btn sm'+(isOn?' on':'')} onClick={()=>toggle(opt.id)}>{isOn?'선택됨':'선택'}</button></div></div>
+                              </div>
+                                                          </div>
+                          );
+                        }
+                        return (
+                          <div key={opt.id} className={'app-item'+(isOn?' on':'')}>
+                            <div className="app-sub">
+                              <div className="app-name"><div className="app-main">{opt.name}</div>{opt.model && <div className="app-model">{opt.model}</div>}</div>
+                              <div><div className="app-type">미선택형</div><div className={'app-val'+(opt.base==='-'?' dash':'')}>{opt.base === '-' ? '–' : opt.base}</div></div>
+                              <div></div>
+                            </div>
+                            <div className="app-sub sel">
+                              <div></div>
+                              <div><div className="app-type sel-type">선택형{opt.note ? ' '+opt.note : ''}</div><div className="app-price">공급금액 : {fmt(opt.price)}</div></div>
+                              <button className={'toggle-btn sm'+(isOn?' on':'')} onClick={()=>toggle(opt.id)}>{isOn?'선택됨':'선택'}</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {allApps.some(o=>o.appNotes) && <div className="cmp-notes">{allApps.filter(o=>o.appNotes).flatMap(o=>o.appNotes).map((n,i)=><div key={i} className="cmp-note">{n}</div>)}</div>}
+                  </div>
+                );
+              }
+              const hasImg = ['주방 마감 및 가구 특화','붙박이장','공간(드레스룸) 특화'].includes(cat);
+              const catOpts = catMap[cat];
+              const imgOpt = catOpts.find(o => o.baseImg || o.img) || catOpts[0];
+              return (
+                <div key={cat} className="cat-section">
+                  <div className="cmp-card">
+                    <div className="cmp-head">▣ {cat} 옵션 선택</div>
+                    <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
+                    {hasImg && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
+                    {catOpts.map(opt => {
+                      const isOn = sel[opt.id] !== undefined;
+                      const isExcl = opt.group && allOpts.some(o => o.group===opt.group && o.id!==opt.id && sel[o.id]!==undefined);
+                      const bItems = (opt.base||'').split(' + ');
+                      const sItems = (opt.label||opt.name||'').split(' + ');
+                      return (
+                        <div key={opt.id} className={'cmp-row'+(isOn?' on':'')+(isExcl?' excluded':'')}>
+                          <div className="cmp-cols">
+                            <div className="cmp-col"><div className="cmp-desc">{opt.base?bItems.map((x,i) => <div key={i}>· {x}</div>):null}</div><div className="cmp-dash">–</div></div>
+                            <div className="cmp-col"><div className="cmp-desc">{sItems.map((x,i) => <div key={i}>· {x}</div>)}</div><div className="cmp-price">공급금액 : {fmt(opt.price)}</div></div>
+                          </div>
+                          <div className="cmp-foot">{isExcl && <span className="cmp-excl">⚠ 상호 배타 옵션</span>}<button className={'toggle-btn'+(isOn?' on':'')} onClick={()=>toggle(opt.id)}>{isOn?'선택됨':'선택'}</button></div>
+                          {opt.notes&&<div className="cmp-notes">{opt.notes.map((n,i)=><div key={i} className="cmp-note">{n}</div>)}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="sidebar">
+            <div className="sidebar-sticky">
+              <h3>선택 내역</h3>
+              {selectedList.length===0 && <p className="empty">선택된 옵션이 없습니다</p>}
+              {selectedList.map(o => <div key={o.id} className="sidebar-item"><span>{o.label||o.name}</span><span>{fmt(o.price)}</span></div>)}
+              <div className="sidebar-total"><span>합계</span><span>{fmt(total)}</span></div>
+              <button className="primary-btn" onClick={()=>setStep(2)}>신청서 확인 &rarr;</button>
+              <button className="secondary-btn" onClick={()=>setStep(0)}>&larr; 처음으로</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container">
+      <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho}/>
+      <div className="summary-card">
+        <div className="summary-header">
+          <h1>청량리역 요진 와이시티</h1>
+          <h2>{typeData.name} 멀티플러스 옵션 신청서</h2>
+        </div>
+        <div className="summary-info">
+          <div className="info-row"><span>평형</span><span>{typeData.name}</span></div>
+          <div className="info-row"><span>동 / 호</span><span>{dong}동 {ho}호</span></div>
+          <div className="info-row"><span>계약자</span><span>{contractor}</span></div>
+        </div>
+        <table className="summary-table">
+          <thead><tr><th>구분</th><th>옵션 내용</th><th>금액</th></tr></thead>
+          <tbody>
+            {selectedList.map(o => <tr key={o.id}><td>{o.cat}</td><td>{o.label||o.name}{o.model?' ('+o.model+')':''}</td><td className="price-cell">{fmt(o.price)}</td></tr>)}
+            {selectedList.length===0 && <tr><td colSpan="3" className="empty-cell">선택된 옵션이 없습니다 (전체 미선택형)</td></tr>}
+          </tbody>
+          <tfoot>
+            <tr><td colSpan="2">총 옵션 금액</td><td className="price-cell total-cell">{fmt(total)}</td></tr>
+          </tfoot>
+        </table>
+        <div className="summary-sign">
+          <p>상기 옵션을 신청합니다.</p>
+          <div className="sign-pad-wrap">
+            <div className="sign-pad-label">✒️ 아래에 서명해 주세요</div>
+            {signData ? (
+              <img src={signData} alt="서명" className="sign-img" />
+            ) : (
+              <div className="sign-canvas-box">
+                <canvas ref={canvasRef} width={360} height={120}
+                  onMouseDown={startDraw} onMouseMove={moveDraw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                  onTouchStart={startDraw} onTouchMove={moveDraw} onTouchEnd={endDraw}
+                />
+                <div className="sign-placeholder">터치 또는 마우스로 서명</div>
+              </div>
+            )}
+            <div className="sign-actions">
+              {signData ? (
+              <button className="sign-clear-btn" onClick={clearSign}>다시 쓰기</button>
+            ) : (
+              <React.Fragment>
+                <button className="sign-clear-btn" onClick={clearSign}>지우기</button>
+                <button className="sign-confirm-btn" onClick={confirmSign}>서명 완료</button>
+              </React.Fragment>
+            )}
+            </div>
+          </div>
+          <div className="sign-row">
+            <span>계약자: {contractor}</span>
+            <span className="sign-seal-wrap">(인){signData && <img className="sign-inline-img" src={signData} alt="서명"/>}</span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
+          </div>
+          <div className="sign-date">{new Date().toLocaleDateString('ko-KR')}</div>
+        </div>
+        {submitResult && (
+          <div
+            role="status"
+            className={`submit-banner ${submitResult.ok ? "submit-banner--ok" : "submit-banner--err"}`}
+          >
+            {submitResult.message}
+          </div>
+        )}
+        <div className="summary-actions">
+          <button type="button" className="primary-btn" disabled={!signData || submitting} onClick={onSubmitComplete}>
+            {submitting ? '제출 중...' : '신청완료'}
+          </button>
+          <button type="button" className="secondary-btn" onClick={() => window.print()}>인쇄하기</button>
+          <button type="button" className="secondary-btn" onClick={() => { setSubmitResult(null); setStep(1); }}>&larr; 옵션 수정</button>
+          <button type="button" className="secondary-btn" onClick={() => { setStep(0); setSel({}); setSignData(null); setSubmitResult(null); }}>새로 작성</button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
