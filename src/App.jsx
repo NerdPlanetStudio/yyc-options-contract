@@ -1,19 +1,98 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
+
+/** 로컬에 `allowedResidents.json`이 있으면 우선(비공개), 없으면 샘플만 — 공개 저장소에 실명 DB를 올리지 않기 위함 */
+const residentJsonModules = import.meta.glob("./data/*.json", { eager: true });
+const realJson = Object.entries(residentJsonModules).find(([p]) => /\/allowedResidents\.json$/.test(p));
+const sampleJson = Object.entries(residentJsonModules).find(([p]) => /allowedResidents\.sample\.json$/.test(p));
+const allowedResidents = realJson?.[1]?.default ?? sampleJson?.[1]?.default ?? [];
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://rjcrywtpsjehobckrqjj.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-HuVy_kanJ9qo-KrSGXXlA_bPn1nx5J";
 
+/** Desktop 더미데이터.xlsx 기준 세대 — 동·호·계약자명·휴대폰 뒷 4자리 일치 행을 찾고, 선택 평형(typeKey)까지 같아야 통과 */
+function matchAllowedResident(dong, ho, contractorName, phoneLast4) {
+  const d = String(dong ?? "").replace(/\D/g, "");
+  const h = String(ho ?? "").replace(/\D/g, "");
+  const name = String(contractorName ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const p = String(phoneLast4 ?? "").replace(/\D/g, "");
+  if (!d || !h || !name || p.length !== 4) return null;
+  return (
+    allowedResidents.find(
+      (r) => r.dong === d && r.ho === h && r.name === name && r.phoneTail === p
+    ) ?? null
+  );
+}
+
+/** 예: YYC-2026-00004 — DB 함수가 아직 옛 버전일 때 */
+function looksLikeLegacyYycReceiptNo(s) {
+  const t = String(s || "").trim();
+  const parts = t.split("-");
+  if (parts.length !== 3 || parts[0] !== "YYC") return false;
+  return /^\d{4}$/.test(parts[1]) && /^\d+$/.test(parts[2]);
+}
+
+/** Supabase `next_yyc_receipt_no` RPC → `YYC-20260511001` (서울 YYYYMMDD + 3자리 일련; 단지 155세대라 연간 001~999면 충분, sql/next_yyc_receipt_no.sql) */
+async function fetchNextReceiptNoFromSupabase() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/next_yyc_receipt_no`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${SUPABASE_KEY}`
+    },
+    body: "{}"
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("접수번호 발급 실패:", errorText);
+    let hint = "";
+    try {
+      const j = JSON.parse(errorText);
+      if (String(j?.code || "") === "PGRST202" || String(j?.message || "").includes("next_yyc_receipt_no")) {
+        hint =
+          "\n\n[원인] Supabase DB에 함수 public.next_yyc_receipt_no 가 아직 없습니다.\n[조치] 프로젝트의 supabase/sql/next_yyc_receipt_no.sql 전체를 Supabase → SQL Editor 에서 실행한 뒤 다시 시도하세요.";
+      }
+    } catch {
+      /* raw text */
+    }
+    throw new Error(
+      (errorText || "접수번호를 발급하지 못했습니다.") + hint
+    );
+  }
+  const raw = await res.text();
+  if (!raw) throw new Error("접수번호가 비어 있습니다.");
+  let receipt;
+  try {
+    const parsed = JSON.parse(raw);
+    receipt = typeof parsed === "string" ? parsed : String(parsed);
+  } catch {
+    receipt = raw.replace(/^"|"$/g, "").trim();
+  }
+  if (looksLikeLegacyYycReceiptNo(receipt)) {
+    throw new Error(
+      "접수번호 RPC가 예전 형식(YYC-연도-일련)을 돌려주고 있습니다.\n\n" +
+        "Supabase → SQL Editor에서 supabase/sql/next_yyc_receipt_no.sql 파일 전체를 실행해 next_yyc_receipt_no 함수를 최신으로 올려 주세요.\n\n" +
+        "※ 관리자 목록에 이미 있는 접수번호는 저장 당시 값이라 바뀌지 않습니다. SQL 반영 후 새로 「신청완료」한 건만 새 형식(YYC-YYYYMMDD001)입니다."
+    );
+  }
+  return receipt;
+}
+
 /** 신청 저장용 — React 상태 기준( DOM 미동기·빈 RPC 응답 이슈 방지 ) */
-function buildApplicationPayloadFromState({ dong, ho, contractor, unitType, selectedList, total, signData }) {
+function buildApplicationPayloadFromState({ dong, ho, contractor, phoneLast4, unitType, selectedList, total, signData, receiptNo }) {
   const selected_options = selectedList.map((o) => ({
     category: o.cat,
     label: (o.label || o.name || "").trim(),
     price: Number(o.price) || 0
   }));
+  const phone = String(phoneLast4 ?? "").replace(/\D/g, "").slice(0, 4);
   return {
-    receipt_no: `YYC-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    receipt_no: receiptNo,
     customer_name: (contractor || "").trim() || "미입력",
-    phone: "",
+    phone: phone || "",
     dong: String(dong ?? "").replace(/\D/g, "") || "",
     ho: String(ho ?? "").replace(/\D/g, "") || "",
     unit_type: (unitType || "").trim() || "미입력",
@@ -138,12 +217,135 @@ async function adminUpdateApplication(id, patch) {
   return res.json();
 }
 
+/** 초기화용 — `id` 만 여러 페이지에 나눠 조회 (기본 1000건 제한 회피) */
+async function adminFetchAllApplicationIds() {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const ids = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  for (;;) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?select=id&order=created_at.desc`, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+        Range: `${offset}-${offset + pageSize - 1}`
+      }
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) clearAdminSession();
+      const errorText = await res.text();
+      console.error("접수 id 목록 조회 실패:", errorText);
+      throw new Error("접수 목록을 불러오지 못했습니다. 다시 로그인해 주세요.");
+    }
+
+    const batch = await res.json();
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const r of batch) {
+      if (r?.id) ids.push(r.id);
+    }
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return ids;
+}
+
+/** 관리자 초기화 — `applications` 행 삭제 (배치). Supabase 에 DELETE 정책이 있어야 합니다. */
+async function adminDeleteApplicationsByIds(ids) {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const unique = [...new Set((ids || []).map(String).filter(Boolean))];
+  if (unique.length === 0) return;
+
+  const chunkSize = 60;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const inList = chunk.join(",");
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/applications?id=in.(${inList})`, {
+      method: "DELETE",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${session.access_token}`,
+        Prefer: "return=minimal"
+      }
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) clearAdminSession();
+      const errorText = await res.text();
+      console.error("접수 삭제 실패:", errorText);
+      let msg = "접수 데이터 삭제에 실패했습니다.";
+      if (res.status === 401) msg = "로그인이 만료되었습니다. 다시 로그인해 주세요.";
+      else if (res.status === 403)
+        msg +=
+          " Supabase `applications` 테이블에 authenticated DELETE 정책이 있는지 확인해 주세요. (supabase/sql/applications_delete_policy.sql)";
+      throw new Error(msg);
+    }
+  }
+}
+
+function parseSupabaseErrorMessage(raw) {
+  if (raw == null) return "";
+  const s = String(raw);
+  try {
+    const j = JSON.parse(s);
+    if (j && typeof j.message === "string" && j.message) return j.message;
+  } catch {
+    /* ignore */
+  }
+  return s;
+}
+
+function isAdminClearRpcMissing(err) {
+  const t = String(err?.message || "");
+  if (err?.status === 404) return true;
+  if (t.includes("PGRST202")) return true;
+  if (/Could not find the function/i.test(t)) return true;
+  return false;
+}
+
+/** 관리자 초기화(권장) — DB의 applications 전부 삭제. Supabase 에 admin_clear_all_applications.sql 실행 필요 */
+async function adminClearAllApplicationsRpc() {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_clear_all_applications`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: "{}"
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    if (res.status === 401) clearAdminSession();
+    const err = new Error(parseSupabaseErrorMessage(raw) || "admin_clear_all_applications RPC 실패");
+    err.status = res.status;
+    throw err;
+  }
+  if (!raw) return 0;
+  try {
+    const v = JSON.parse(raw);
+    return typeof v === "number" ? v : Number(v) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 function installAdminStyles() {
   if (document.getElementById("yyc-admin-style")) return;
 
   const style = document.createElement("style");
   style.id = "yyc-admin-style";
-  style.textContent = `.admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}.admin-shell{max-width:1200px;margin:0 auto}.admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.admin-title h1{font-size:2.5rem;font-weight:800;margin:0 0 .75rem;letter-spacing:-.03em;color:#fff}.admin-title p{font-size:1rem;opacity:.85;margin:0;color:#fff}.admin-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem}.admin-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08);border:0;box-sizing:border-box}.admin-login{width:min(440px,calc(100vw - 2rem));margin:12vh auto 0;text-align:left;overflow:hidden}.admin-login .admin-title{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;margin:-2rem -2rem 1.5rem;padding:2rem 1.5rem;border-radius:1rem 1rem 0 0}.admin-login .admin-title h1{font-size:1.75rem;margin:0 0 .5rem;color:#fff}.admin-login .admin-title p{font-size:.875rem;color:#fff;opacity:.85}.admin-field{display:flex;flex-direction:column;gap:.45rem;margin-bottom:1rem}.admin-field label{font-size:.875rem;font-weight:700;color:#1e3a5f}.admin-input,.admin-select,.admin-textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:.5rem;padding:.675rem .875rem;font-size:.9375rem;background:#fff;color:#1e293b;outline:none;transition:border-color .2s,box-shadow .2s}.admin-input:focus,.admin-select:focus,.admin-textarea:focus{border-color:#1e3a5f;box-shadow:0 0 0 3px rgba(30,58,95,.12)}.admin-textarea{min-height:100px;resize:vertical}.admin-btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:.5rem;background:#1e3a5f;color:#fff;font-size:.9375rem;font-weight:800;padding:.75rem 1.25rem;cursor:pointer;transition:background .2s,border-color .2s;text-decoration:none}.admin-btn:hover{background:#2c5282}.admin-btn.secondary{background:#fff;color:#475569;border:1px solid #cbd5e1}.admin-btn.secondary:hover{background:#f8fafc;border-color:#94a3b8}.admin-btn.danger{background:#991b1b;color:#fff}.admin-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto;gap:.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e2e8f0}.admin-layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:1rem;align-items:start}.admin-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}.admin-table{width:100%;border-collapse:collapse;min-width:820px}.admin-table th{background:#1e3a5f;color:#fff;text-align:left;font-size:.8125rem;padding:.75rem;white-space:nowrap;font-weight:700}.admin-table td{border-bottom:1px solid #e2e8f0;padding:.75rem;font-size:.875rem;vertical-align:middle}.admin-table tr{cursor:pointer;transition:background .15s}.admin-table tr:hover{background:#f8fafc}.admin-table tr.active{background:#eef2ff}.admin-badge{display:inline-block;border-radius:2rem;padding:.25rem .75rem;font-size:.75rem;font-weight:800;background:#e0f2fe;color:#075985;white-space:nowrap}.admin-badge.done{background:#dcfce7;color:#166534}.admin-badge.cancel{background:#fee2e2;color:#991b1b}.admin-price{text-align:right;font-weight:800;color:#1e3a5f;white-space:nowrap}.admin-detail{position:sticky;top:1rem}.admin-detail-empty{text-align:center;color:#94a3b8;padding:3rem 1rem}.admin-detail h2{font-size:1.125rem;color:#1e3a5f;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}.admin-kv{display:grid;grid-template-columns:90px 1fr;gap:.5rem .75rem;font-size:.875rem;margin-bottom:1rem}.admin-kv b{color:#64748b}.admin-options{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:.5rem 0;margin:1rem 0;max-height:240px;overflow:auto}.admin-option{display:flex;justify-content:space-between;gap:.75rem;font-size:.8125rem;padding:.5rem 0;border-bottom:1px dashed #e2e8f0}.admin-option:last-child{border-bottom:0}.admin-sign{max-width:180px;max-height:80px;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;display:block;margin-top:.5rem}.admin-error{color:#b91c1c;font-size:.875rem;margin-top:.75rem;white-space:pre-wrap}.admin-loading{color:#64748b;font-size:.875rem;margin:.75rem 0}@media(max-width:900px){.admin-filters{grid-template-columns:1fr 1fr}.admin-layout{grid-template-columns:1fr}.admin-detail{position:static}.admin-title h1{font-size:1.75rem}.admin-top{padding:2rem 1rem}.admin-actions{margin-top:1rem}}`;
+  style.textContent = `.admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}.admin-shell{max-width:1200px;margin:0 auto}.admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.admin-title h1{font-size:2.5rem;font-weight:800;margin:0 0 .75rem;letter-spacing:-.03em;color:#fff}.admin-title p{font-size:1rem;opacity:.85;margin:0;color:#fff}.admin-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem}.admin-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08);border:0;box-sizing:border-box}.admin-login{width:min(440px,calc(100vw - 2rem));margin:12vh auto 0;text-align:left;overflow:hidden}.admin-login .admin-title{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;margin:-2rem -2rem 1.5rem;padding:2rem 1.5rem;border-radius:1rem 1rem 0 0}.admin-login .admin-title h1{font-size:1.75rem;margin:0 0 .5rem;color:#fff}.admin-login .admin-title p{font-size:.875rem;color:#fff;opacity:.85}.admin-field{display:flex;flex-direction:column;gap:.45rem;margin-bottom:1rem}.admin-field label{font-size:.875rem;font-weight:700;color:#1e3a5f}.admin-input,.admin-select,.admin-textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:.5rem;padding:.675rem .875rem;font-size:.9375rem;background:#fff;color:#1e293b;outline:none;transition:border-color .2s,box-shadow .2s}.admin-input:focus,.admin-select:focus,.admin-textarea:focus{border-color:#1e3a5f;box-shadow:0 0 0 3px rgba(30,58,95,.12)}.admin-textarea{min-height:100px;resize:vertical}.admin-btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:.5rem;background:#1e3a5f;color:#fff;font-size:.9375rem;font-weight:800;padding:.75rem 1.25rem;cursor:pointer;transition:background .2s,border-color .2s;text-decoration:none}.admin-btn:hover{background:#2c5282}.admin-btn.secondary{background:#fff;color:#475569;border:1px solid #cbd5e1}.admin-btn.secondary:hover{background:#f8fafc;border-color:#94a3b8}.admin-btn.danger{background:#991b1b;color:#fff}.admin-btn.danger:hover{background:#b91c1c;color:#fff}.admin-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto;gap:.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e2e8f0}.admin-layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:1rem;align-items:start}.admin-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}.admin-table{width:100%;border-collapse:collapse;min-width:1080px}.admin-table th{background:#1e3a5f;color:#fff;text-align:left;font-size:.8125rem;padding:.75rem;white-space:nowrap;font-weight:700}.admin-table td{border-bottom:1px solid #e2e8f0;padding:.75rem;font-size:.875rem;vertical-align:middle}.admin-table tr{cursor:pointer;transition:background .15s}.admin-table tr:hover{background:#f8fafc}.admin-table tr.active{background:#eef2ff}.admin-badge{display:inline-block;border-radius:2rem;padding:.25rem .75rem;font-size:.75rem;font-weight:800;background:#e0f2fe;color:#075985;white-space:nowrap}.admin-badge.done{background:#dcfce7;color:#166534}.admin-badge.cancel{background:#fee2e2;color:#991b1b}.admin-price{text-align:right;font-weight:800;color:#1e3a5f;white-space:nowrap}.admin-detail{position:sticky;top:1rem}.admin-detail-empty{text-align:center;color:#94a3b8;padding:3rem 1rem}.admin-detail h2{font-size:1.125rem;color:#1e3a5f;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}.admin-kv{display:grid;grid-template-columns:90px 1fr;gap:.5rem .75rem;font-size:.875rem;margin-bottom:1rem}.admin-kv b{color:#64748b}.admin-options{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:.5rem 0;margin:1rem 0;max-height:240px;overflow:auto}.admin-option{display:flex;justify-content:space-between;gap:.75rem;font-size:.8125rem;padding:.5rem 0;border-bottom:1px dashed #e2e8f0}.admin-option:last-child{border-bottom:0}.admin-sign{max-width:180px;max-height:80px;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;display:block;margin-top:.5rem}.admin-error{color:#b91c1c;font-size:.875rem;margin-top:.75rem;white-space:pre-wrap}.admin-loading{color:#64748b;font-size:.875rem;margin:.75rem 0}@media(max-width:900px){.admin-filters{grid-template-columns:1fr 1fr}.admin-layout{grid-template-columns:1fr}.admin-detail{position:static}.admin-title h1{font-size:1.75rem}.admin-top{padding:2rem 1rem}.admin-actions{margin-top:1rem}}`;
   document.head.appendChild(style);
 }
 
@@ -154,6 +356,14 @@ function formatAdminDate(value) {
 
 function formatAdminPrice(value) {
   return `${Number(value || 0).toLocaleString("ko-KR")}원`;
+}
+
+/** 휴대폰 뒷자리(저장값) 표시 — 숫자만 남겨 최대 4자리 */
+function formatPhoneTailDisplay(value) {
+  if (value == null || value === "") return "-";
+  const d = String(value).replace(/\D/g, "");
+  if (!d) return "-";
+  return d.length <= 4 ? d : d.slice(-4);
 }
 
 function statusClass(status) {
@@ -167,11 +377,12 @@ function csvEscape(value) {
 }
 
 function downloadApplicationsCsv(rows) {
-  const header = ["접수번호","접수일시","고객명","동","호","타입","총액","상태","메모"];
+  const header = ["접수번호","접수일시","고객명","휴대폰뒷자리","동","호","타입","총액","상태","메모"];
   const body = rows.map((r) => [
     r.receipt_no,
     formatAdminDate(r.created_at),
     r.customer_name,
+    formatPhoneTailDisplay(r.phone),
     r.dong,
     r.ho,
     r.unit_type,
@@ -193,6 +404,14 @@ export function isAdminRoute() {
   const hash = (window.location.hash || "").toLowerCase();
   const path = (window.location.pathname || "").toLowerCase();
   return hash.startsWith("#admin") || path.endsWith("/admin") || path.includes("/admin/");
+}
+
+function escapeHtmlAttr(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 export function renderAdminDashboardIfNeeded() {
@@ -232,7 +451,7 @@ export function renderAdminDashboardIfNeeded() {
       return;
     }
 
-    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.</p></div><div class="admin-actions"><button class="admin-btn secondary" id="admin-refresh">새로고침</button><button class="admin-btn secondary" id="admin-csv">CSV 다운로드</button><button class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
+    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.</p></div><div class="admin-actions"><button type="button" class="admin-btn secondary" id="admin-refresh">새로고침</button><button type="button" class="admin-btn secondary" id="admin-csv">CSV 다운로드</button><button type="button" class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card" id="yyc-admin-list-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
 
     document.getElementById("admin-logout").onclick = () => {
       clearAdminSession();
@@ -240,18 +459,21 @@ export function renderAdminDashboardIfNeeded() {
     };
 
     try {
-      const rows = await adminFetchApplications();
+      let rows = await adminFetchApplications();
       let filtered = [...rows];
       let selected = filtered[0] || null;
 
       const renderRows = () => {
+        const listCard = shell.querySelector("#yyc-admin-list-card");
+        if (!listCard) return;
+
         const keyword = (document.getElementById("admin-search")?.value || "").trim().toLowerCase();
         const status = document.getElementById("admin-status-filter")?.value || "";
         const unitType = document.getElementById("admin-type-filter")?.value || "";
         const dong = (document.getElementById("admin-dong-filter")?.value || "").trim();
 
         filtered = rows.filter((row) => {
-          const haystack = [row.receipt_no,row.customer_name,row.dong,row.ho,row.unit_type,row.status].join(" ").toLowerCase();
+          const haystack = [row.receipt_no,row.customer_name,row.dong,row.ho,row.unit_type,row.status,row.phone].join(" ").toLowerCase();
           return (!keyword || haystack.includes(keyword)) &&
             (!status || row.status === status) &&
             (!unitType || row.unit_type === unitType) &&
@@ -261,18 +483,23 @@ export function renderAdminDashboardIfNeeded() {
         if (selected && !filtered.some((r) => r.id === selected.id)) selected = filtered[0] || null;
 
         const typeOptions = Array.from(new Set(rows.map((r) => r.unit_type).filter(Boolean)))
-          .map((t) => `<option value="${t}">${t}</option>`).join("");
+          .map((t) => `<option value="${escapeHtmlAttr(t)}">${escapeHtmlAttr(t)}</option>`).join("");
 
-        document.querySelector(".admin-card").innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/접수번호 검색" value="${keyword}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dong}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button class="admin-btn secondary" id="admin-filter-reset">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수일시</th><th>고객명</th><th>동/호</th><th>타입</th><th>총액</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
+        const kwAttr = escapeHtmlAttr(keyword);
+        const dongAttr = escapeHtmlAttr(dong);
+
+        listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn danger" id="admin-filter-reset" title="저장된 모든 접수를 삭제합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
                     <tr data-id="${r.id}" class="${selected?.id === r.id ? "active" : ""}">
+                      <td style="font-size:12px;white-space:nowrap">${r.receipt_no || "-"}</td>
                       <td>${formatAdminDate(r.created_at)}</td>
-                      <td><b>${r.customer_name || "-"}</b><br><span style="color:#94a3b8;font-size:11px">${r.receipt_no || ""}</span></td>
                       <td>${r.dong || "-"}동 ${r.ho || "-"}호</td>
                       <td>${r.unit_type || "-"}</td>
                       <td class="admin-price">${formatAdminPrice(r.total_price)}</td>
+                      <td>${formatPhoneTailDisplay(r.phone)}</td>
+                      <td><b>${r.customer_name || "-"}</b></td>
                       <td><span class="admin-badge ${statusClass(r.status)}">${r.status || "접수됨"}</span></td>
                     </tr>
-                  `).join("") || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">접수 기록이 없습니다.</td></tr>`}</tbody></table></div><div class="admin-card admin-detail" id="admin-detail"></div></div>`;
+                  `).join("") || `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:32px">접수 기록이 없습니다.</td></tr>`}</tbody></table></div><div class="admin-card admin-detail" id="admin-detail"></div></div>`;
 
         if (unitType) document.getElementById("admin-type-filter").value = unitType;
         if (status) document.getElementById("admin-status-filter").value = status;
@@ -282,14 +509,69 @@ export function renderAdminDashboardIfNeeded() {
           document.getElementById(id).addEventListener("change", renderRows);
         });
 
-        document.getElementById("admin-filter-reset").onclick = () => {
-          document.getElementById("admin-search").value = "";
-          document.getElementById("admin-dong-filter").value = "";
-          document.getElementById("admin-type-filter").value = "";
-          document.getElementById("admin-status-filter").value = "";
-          selected = rows[0] || null;
-          renderRows();
-        };
+        const resetBtn = document.getElementById("admin-filter-reset");
+        if (resetBtn) {
+          resetBtn.onclick = async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            let ids = [];
+            try {
+              ids = await adminFetchAllApplicationIds();
+            } catch {
+              ids = rows.map((r) => r.id).filter(Boolean);
+            }
+
+            if (ids.length > 0) {
+              if (
+                !confirm(
+                  "Supabase에 저장된 모든 접수(고객) 데이터를 삭제합니다. 복구할 수 없습니다. 계속할까요?"
+                )
+              ) {
+                return;
+              }
+            }
+
+            resetBtn.disabled = true;
+            const prevLabel = resetBtn.textContent;
+            resetBtn.textContent = "삭제 중...";
+
+            try {
+              if (ids.length > 0) {
+                try {
+                  await adminClearAllApplicationsRpc();
+                } catch (rpcErr) {
+                  if (!isAdminClearRpcMissing(rpcErr)) throw rpcErr;
+                  await adminDeleteApplicationsByIds(ids);
+                }
+                const remaining = await adminFetchAllApplicationIds();
+                if (remaining.length > 0) {
+                  throw new Error(
+                    `삭제 후에도 서버에 접수가 ${remaining.length}건 남아 있습니다.\n\nSupabase SQL Editor에서 supabase/sql/admin_clear_all_applications.sql 전체를 실행한 뒤 다시 초기화해 주세요.`
+                  );
+                }
+              }
+
+              const s = document.getElementById("admin-search");
+              const d = document.getElementById("admin-dong-filter");
+              const ty = document.getElementById("admin-type-filter");
+              const st = document.getElementById("admin-status-filter");
+              if (s) s.value = "";
+              if (d) d.value = "";
+              if (ty) ty.value = "";
+              if (st) st.value = "";
+              rows = [];
+              selected = null;
+              renderRows();
+            } catch (err) {
+              alert(parseSupabaseErrorMessage(err.message) || err.message || "삭제에 실패했습니다.");
+              await renderList();
+            } finally {
+              resetBtn.disabled = false;
+              resetBtn.textContent = prevLabel;
+            }
+          };
+        }
 
         document.querySelectorAll(".admin-table tbody tr[data-id]").forEach((tr) => {
           tr.onclick = () => {
@@ -310,7 +592,7 @@ export function renderAdminDashboardIfNeeded() {
 
         const options = Array.isArray(selected.selected_options) ? selected.selected_options : [];
 
-        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
+        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>휴대폰 뒷자리</b><span>${formatPhoneTailDisplay(selected.phone)}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
               <div class="admin-option">
                 <span><b>${o.category || "-"}</b><br>${o.label || o.name || "-"}</span>
                 <b>${formatAdminPrice(o.price)}</b>
@@ -538,7 +820,7 @@ function getAppliances(t) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
-function ApplicationForm59A({typeData,sel,signData,contractor,dong,ho}){
+function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho, phoneLast4 }) {
   if(!typeData) return null;
   const f=(n)=>String.fromCharCode(8361)+n.toLocaleString('ko-KR');
   const on=(id)=>sel[id]!==undefined;
@@ -679,7 +961,13 @@ function ApplicationForm59A({typeData,sel,signData,contractor,dong,ho}){
           </tbody></table>
           <div className="af-tc" style={ {marginTop:'4mm',fontSize:'8pt',color:'#475569'} }>
             <div style={ {marginBottom:'1mm'} }>상기 옵션을 신청합니다.</div>
-            <div className="af-b" style={ {fontSize:'9pt'} }>계약자: {contractor} <span className="af-seal" style={ {marginLeft:'2mm'} }>(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span></div>
+            <div className="af-b" style={ {fontSize:'9pt'} }>
+              계약자: {contractor}
+              {phoneLast4 && String(phoneLast4).replace(/\D/g, "").length === 4
+                ? ` · 휴대폰 뒷자리: ${formatPhoneTailDisplay(phoneLast4)}`
+                : ""}{" "}
+              <span className="af-seal" style={ {marginLeft:'2mm'} }>(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
+            </div>
             <div style={ {color:'#64748b',fontSize:'8pt',marginTop:'1mm'} }>{dateStr}</div>
           </div>
         </div>
@@ -693,11 +981,14 @@ export function App() {
   const [dong, setDong] = useState('');
   const [ho, setHo] = useState('');
   const [contractor, setContractor] = useState('');
+  const [phoneLast4, setPhoneLast4] = useState('');
   const [typeKey, setTypeKey] = useState('');
   const [sel, setSel] = useState({});
   const [signData, setSignData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
+  const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
+  const [noticeModal, setNoticeModal] = useState(null);
   const canvasRef = useRef(null);
   const isDrawing = useRef(false);
   const hasDraw = useRef(false);
@@ -719,6 +1010,36 @@ export function App() {
       root.classList.remove("yyc-print-source-page");
     };
   }, [step]);
+
+  useEffect(() => {
+    if (!contractPreviewOpen) return;
+    document.body.classList.add("yyc-contract-modal-open");
+    const onKey = (e) => {
+      if (e.key === "Escape") setContractPreviewOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.classList.remove("yyc-contract-modal-open");
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [contractPreviewOpen]);
+
+  useEffect(() => {
+    if (!noticeModal) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setNoticeModal(null);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [noticeModal]);
 
   const startDraw = useCallback((e) => {
     const canvas = canvasRef.current; if(!canvas) return;
@@ -797,29 +1118,35 @@ export function App() {
     const list = allOpts.filter((o) => sel[o.id] !== undefined);
     const sum = Object.values(sel).reduce((s, v) => s + v, 0);
     try {
+      const receiptNo = await fetchNextReceiptNoFromSupabase();
       const payload = buildApplicationPayloadFromState({
         dong,
         ho,
         contractor,
+        phoneLast4,
         unitType: typeData.name,
         selectedList: list,
         total: sum,
-        signData
+        signData,
+        receiptNo
       });
       await submitApplicationToAdmin(payload);
       const okMsg =
-        "신청이 접수되었습니다. 담당자가 관리자 화면에서 확인합니다. 인쇄가 필요하면 「인쇄하기」를 눌러 주세요.";
+        "신청이 접수되었습니다. 담당자가 관리자 화면에서 확인합니다. 아래에서 계약서를 확인한 뒤, 필요하면 「인쇄하기」를 눌러 주세요.";
       setSubmitResult({ ok: true, message: okMsg });
-      window.alert("신청이 완료되었습니다.\n접수 내역은 관리자에서 확인합니다.");
+      setContractPreviewOpen(true);
     } catch (err) {
       console.error(err);
       const msg = err?.message || "저장에 실패했습니다.";
       setSubmitResult({ ok: false, message: msg });
-      window.alert(`신청 정보 저장에 실패했습니다.\n\n${msg}`);
+      setNoticeModal({
+        title: "신청 저장 실패",
+        body: `저장 중 오류가 발생했습니다.\n\n${msg}`
+      });
     } finally {
       setSubmitting(false);
     }
-  }, [signData, submitting, typeData, allOpts, sel, dong, ho, contractor, signData]);
+  }, [signData, submitting, typeData, allOpts, sel, dong, ho, contractor, phoneLast4]);
 
   const toggle = (id) => {
     setSel(prev => {
@@ -838,28 +1165,106 @@ export function App() {
   const resetType = (key) => { setTypeKey(key); setSel({}); };
   const selectedList = allOpts.filter(o => sel[o.id] !== undefined);
 
+  const tryEnterOptionsFromGate = useCallback(() => {
+    if (!typeKey) {
+      setNoticeModal({
+        title: "평형 선택",
+        body: "옵션 신청을 계속하려면 아래에서 평형(㎡)을 한 가지 선택해 주세요."
+      });
+      return;
+    }
+    const row = matchAllowedResident(dong, ho, contractor, phoneLast4);
+    if (!row) {
+      setNoticeModal({
+        title: "등록 정보 불일치",
+        body: "입력하신 동·호·계약자명·휴대폰 뒷 4자리가 단지 등록 세대와 일치하지 않습니다.\n\n분양 계약서·등록부와 동일하게 입력했는지 다시 확인해 주세요."
+      });
+      return;
+    }
+    if (row.typeKey !== typeKey) {
+      const expect = TYPES.find((t) => t.key === row.typeKey)?.name || row.typeKey;
+      setNoticeModal({
+        title: "평형 확인",
+        body: `선택하신 평형이 등록된 세대 정보와 다릅니다.\n\n해당 세대의 평형은 「${expect}」입니다. 평형 버튼을 맞게 선택한 뒤 다시 시도해 주세요.`
+      });
+      return;
+    }
+    setStep(1);
+  }, [dong, ho, contractor, phoneLast4, typeKey]);
+
+  const noticePortal =
+    noticeModal &&
+    createPortal(
+      <div
+        className="yyc-notice-backdrop"
+        role="presentation"
+        onClick={() => setNoticeModal(null)}
+      >
+        <div
+          className="yyc-notice-panel"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="yyc-notice-title"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="yyc-notice-head">
+            <h3 id="yyc-notice-title" className="yyc-notice-title">
+              {noticeModal.title}
+            </h3>
+          </div>
+          <p className="yyc-notice-body">{noticeModal.body}</p>
+          <div className="yyc-notice-foot">
+            <button type="button" className="yyc-notice-btn" onClick={() => setNoticeModal(null)}>
+              확인
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+
   if (step === 0) {
     return (
+      <>
       <div className="container">
         <header className="hero">
           <h1 className="hero-title">청량리역 요진 와이시티</h1>
           <p className="hero-sub">멀티플러스 옵션 전자 신청 시스템</p>
         </header>
         <div className="form-card">
-          <h2 className="section-title">계약자 정보</h2>
-          <div className="form-row"><label>동</label><input type="text" value={dong} onChange={e=>setDong(e.target.value)} placeholder="예: 101" /></div>
-          <div className="form-row"><label>호</label><input type="text" value={ho} onChange={e=>setHo(e.target.value)} placeholder="예: 1201" /></div>
-          <div className="form-row"><label>계약자명</label><input type="text" value={contractor} onChange={e=>setContractor(e.target.value)} placeholder="이름 입력" /></div>
+          <div className="contractor-form-center">
+            <h2 className="section-title">계약자 정보</h2>
+            <div className="form-row"><label>동</label><input type="text" value={dong} onChange={e=>setDong(e.target.value)} placeholder="예: 101" /></div>
+            <div className="form-row"><label>호</label><input type="text" value={ho} onChange={e=>setHo(e.target.value)} placeholder="예: 1201" /></div>
+            <div className="form-row"><label>계약자명</label><input type="text" value={contractor} onChange={e=>setContractor(e.target.value)} placeholder="이름 입력" /></div>
+            <div className="form-row">
+              <label>휴대폰 뒷자리</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={phoneLast4}
+                onChange={(e) => setPhoneLast4(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="숫자 4자리"
+                autoComplete="off"
+              />
+            </div>
+          </div>
           <h2 className="section-title">평형 선택</h2>
+          <p className="resident-gate-hint">
+            <strong>동·호·성함·휴대폰 뒷 4자리·평형</strong>이 모두 등록 세대 정보와 같아야 다음 단계로 이동할 수 있습니다.
+          </p>
           <div className="type-grid">
             {TYPES.map(t => <button key={t.key} className={'type-btn'+(typeKey===t.key?' active':'')} onClick={()=>resetType(t.key)}>{t.name}</button>)}
           </div>
           <div className="entry-actions">
-            <button className="primary-btn" disabled={!typeKey||!dong||!ho||!contractor} onClick={()=>setStep(1)}>옵션 계약 신청 &rarr;</button>
-            <button className="secondary-btn" disabled={!typeKey||!dong||!ho||!contractor} onClick={()=>setStep(1)}>옵션 계약 변경 신청 &rarr;</button>
+            <button className="primary-btn" disabled={!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>옵션 계약 신청 &rarr;</button>
+            <button className="secondary-btn" disabled={!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>옵션 계약 변경 신청 &rarr;</button>
           </div>
         </div>
       </div>
+      {noticePortal}
+      </>
     );
   }
 
@@ -867,6 +1272,7 @@ export function App() {
     const cats = []; const catMap = {};
     allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];cats.push(o.cat);} catMap[o.cat].push(o); });
     return (
+      <>
       <div className="container">
         <header className="header-bar">
           <span className="header-info">{typeData.name} | {dong}동 {ho}호 | {contractor}</span>
@@ -959,12 +1365,51 @@ export function App() {
           </div>
         </div>
       </div>
+      {noticePortal}
+      </>
     );
   }
 
+  const contractForm = (
+    <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho} phoneLast4={phoneLast4} />
+  );
+
+  const contractPreviewModal =
+    contractPreviewOpen &&
+    createPortal(
+      <div
+        className="contract-preview-backdrop"
+        role="presentation"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setContractPreviewOpen(false);
+        }}
+      >
+        <div className="contract-preview-panel" role="dialog" aria-modal="true" aria-labelledby="contract-preview-title">
+          <div className="contract-preview-head">
+            <h2 id="contract-preview-title">접수 계약서 미리보기</h2>
+            <button type="button" className="contract-preview-close" onClick={() => setContractPreviewOpen(false)} aria-label="닫기">
+              ×
+            </button>
+          </div>
+          <div className="contract-preview-body">{contractForm}</div>
+          <div className="contract-preview-foot">
+            <button type="button" className="secondary-btn" onClick={() => setContractPreviewOpen(false)}>
+              닫기
+            </button>
+            <button type="button" className="primary-btn" onClick={() => window.print()}>
+              인쇄하기
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+
   return (
+    <>
     <div className="container">
-      <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho}/>
+      {!contractPreviewOpen ? contractForm : null}
+      {contractPreviewModal}
       <div className="summary-card">
         <div className="summary-header">
           <h1>청량리역 요진 와이시티</h1>
@@ -974,6 +1419,7 @@ export function App() {
           <div className="info-row"><span>평형</span><span>{typeData.name}</span></div>
           <div className="info-row"><span>동 / 호</span><span>{dong}동 {ho}호</span></div>
           <div className="info-row"><span>계약자</span><span>{contractor}</span></div>
+          <div className="info-row"><span>휴대폰 뒷자리</span><span>{formatPhoneTailDisplay(phoneLast4)}</span></div>
         </div>
         <table className="summary-table">
           <thead><tr><th>구분</th><th>옵션 내용</th><th>금액</th></tr></thead>
@@ -1012,7 +1458,10 @@ export function App() {
             </div>
           </div>
           <div className="sign-row">
-            <span>계약자: {contractor}</span>
+            <span>
+              계약자: {contractor}
+              {phoneLast4.length === 4 ? ` · 휴대폰 뒷자리: ${phoneLast4}` : ""}
+            </span>
             <span className="sign-seal-wrap">(인){signData && <img className="sign-inline-img" src={signData} alt="서명"/>}</span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
           </div>
           <div className="sign-date">{new Date().toLocaleDateString('ko-KR')}</div>
@@ -1030,12 +1479,19 @@ export function App() {
             {submitting ? '제출 중...' : '신청완료'}
           </button>
           <button type="button" className="secondary-btn" onClick={() => window.print()}>인쇄하기</button>
-          <button type="button" className="secondary-btn" onClick={() => { setSubmitResult(null); setStep(1); }}>&larr; 옵션 수정</button>
-          <button type="button" className="secondary-btn" onClick={() => { setStep(0); setSel({}); setSignData(null); setSubmitResult(null); }}>새로 작성</button>
+          {submitResult?.ok && (
+            <button type="button" className="secondary-btn" onClick={() => setContractPreviewOpen(true)}>
+              계약서 미리보기
+            </button>
+          )}
+          <button type="button" className="secondary-btn" onClick={() => { setSubmitResult(null); setContractPreviewOpen(false); setStep(1); }}>&larr; 옵션 수정</button>
+          <button type="button" className="secondary-btn" onClick={() => { setStep(0); setSel({}); setSignData(null); setSubmitResult(null); setContractPreviewOpen(false); setPhoneLast4(""); }}>새로 작성</button>
         </div>
 
       </div>
     </div>
+    {noticePortal}
+    </>
   );
 }
 

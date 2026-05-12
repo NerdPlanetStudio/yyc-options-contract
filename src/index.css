@@ -6,11 +6,16 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .hero-title{font-size:3.25rem;font-weight:800;margin-bottom:.75rem;letter-spacing:.02em}
 .hero-sub{font-size:1.125rem;opacity:.85}
 .form-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.form-card > .section-title{text-align:center;max-width:26rem;width:100%;margin-left:auto;margin-right:auto}
+.resident-gate-hint{font-size:.8125rem;color:#64748b;line-height:1.5;text-align:center;max-width:26rem;margin:-.25rem auto 1rem;padding:0 .5rem}
 .section-title{font-size:1.125rem;font-weight:700;color:#1e3a5f;margin:1.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}
 .section-title:first-child{margin-top:0}
+.contractor-form-center{display:flex;flex-direction:column;align-items:center;width:100%;margin-bottom:.25rem}
+.contractor-form-center .section-title{width:100%;max-width:26rem;text-align:center;margin-left:auto;margin-right:auto}
+.contractor-form-center .form-row{width:100%;max-width:26rem;margin-left:auto;margin-right:auto;justify-content:flex-start}
 .form-row{display:flex;align-items:center;gap:1rem;margin-bottom:.75rem}
-.form-row label{width:80px;font-weight:600;font-size:.9375rem;flex-shrink:0}
-.form-row input{flex:1;padding:.625rem .875rem;border:1px solid #cbd5e1;border-radius:.5rem;font-size:.9375rem;outline:none;transition:border-color .2s}
+.form-row label{min-width:8.75rem;width:8.75rem;font-weight:600;font-size:.9375rem;flex-shrink:0;white-space:nowrap;color:#334155}
+.form-row input{flex:0 1 auto;width:100%;max-width:15rem;min-width:0;padding:.625rem .875rem;border:1px solid #cbd5e1;border-radius:.5rem;font-size:.9375rem;outline:none;transition:border-color .2s}
 .form-row input:focus{border-color:#1e3a5f}
 .type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:.5rem;margin-bottom:1.5rem}
 .type-btn{padding:.625rem;border:2px solid #e2e8f0;border-radius:.5rem;background:#fff;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .2s}
@@ -320,8 +325,147 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .submit-banner{margin-top:1rem;padding:1rem 1.125rem;border-radius:.5rem;font-size:.9375rem;font-weight:600;line-height:1.45}
 .submit-banner--ok{background:#dcfce7;color:#166534;border:1px solid #86efac}
 .submit-banner--err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+.contract-preview-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:10050;
+  background:rgba(15,23,42,.55);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0.75rem;
+  box-sizing:border-box
+}
+.contract-preview-panel{
+  background:#fff;
+  border-radius:0.75rem;
+  /* 가로(랜드스케이프) 양식이 잘리지 않게 넓게 — 좁은 화면은 가로 스크롤 */
+  width:min(1580px,calc(100vw - 1.5rem));
+  max-height:min(92vh,calc(100dvh - 1.5rem));
+  display:flex;
+  flex-direction:column;
+  box-shadow:0 25px 50px -12px rgba(0,0,0,.35);
+  overflow:hidden
+}
+.contract-preview-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:0.75rem;
+  padding:0.75rem 1rem;
+  border-bottom:1px solid #e2e8f0;
+  flex-shrink:0
+}
+.contract-preview-head h2{
+  margin:0;
+  font-size:1.0625rem;
+  font-weight:800;
+  color:#1e3a5f
+}
+.contract-preview-close{
+  width:2.25rem;
+  height:2.25rem;
+  border:none;
+  border-radius:0.375rem;
+  background:#f1f5f9;
+  color:#475569;
+  font-size:1.5rem;
+  line-height:1;
+  cursor:pointer;
+  flex-shrink:0
+}
+.contract-preview-close:hover{background:#e2e8f0;color:#1e293b}
+.contract-preview-body{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:0.75rem 1rem 1rem;
+  background:#f8fafc;
+  -webkit-overflow-scrolling:touch
+}
+.contract-preview-body .app-form-print{
+  position:static!important;
+  left:auto!important;
+  top:auto!important;
+  width:max-content!important;
+  max-width:none!important;
+  pointer-events:auto!important
+}
+/* 화면 미리보기: 인쇄용 가로 2단 폭 유지(좁은 창은 가로 스크롤) */
+.contract-preview-body .afp,.contract-preview-body .app-form-page{
+  width:420mm!important;
+  max-width:none!important;
+  min-height:0!important;
+  page-break-after:auto
+}
+.contract-preview-foot{
+  display:flex;
+  gap:0.5rem;
+  padding:0.75rem 1rem;
+  border-top:1px solid #e2e8f0;
+  flex-shrink:0;
+  background:#fff
+}
+.contract-preview-foot .primary-btn,.contract-preview-foot .secondary-btn{margin-top:0;flex:1}
+.yyc-notice-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:10060;
+  background:rgba(15,23,42,.58);
+  backdrop-filter:blur(4px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:1.25rem;
+  box-sizing:border-box;
+  animation:yyc-notice-in .22s ease-out
+}
+@keyframes yyc-notice-in{from{opacity:0}to{opacity:1}}
+.yyc-notice-panel{
+  width:min(400px,calc(100vw - 2rem));
+  background:#fff;
+  border-radius:1rem;
+  overflow:hidden;
+  box-shadow:0 25px 50px -12px rgba(0,0,0,.4);
+  border:1px solid rgba(226,232,240,.9)
+}
+.yyc-notice-head{
+  background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);
+  color:#fff;
+  padding:1.15rem 1.5rem 1rem
+}
+.yyc-notice-title{
+  margin:0;
+  font-size:1.125rem;
+  font-weight:800;
+  letter-spacing:-.02em;
+  line-height:1.35
+}
+.yyc-notice-body{
+  margin:0;
+  padding:1.35rem 1.5rem 1.25rem;
+  color:#475569;
+  font-size:.9375rem;
+  line-height:1.65;
+  white-space:pre-line
+}
+.yyc-notice-foot{padding:0 1.5rem 1.35rem}
+.yyc-notice-btn{
+  width:100%;
+  padding:.8rem 1rem;
+  border:none;
+  border-radius:.5rem;
+  background:#1e3a5f;
+  color:#fff;
+  font-size:1rem;
+  font-weight:700;
+  cursor:pointer;
+  transition:background .2s
+}
+.yyc-notice-btn:hover{background:#2c5282}
 @media print{
-  @page{size:auto;margin:10mm}
+  /* A4 가로 — 계약서 2단 레이아웃·인쇄 미리보기 모두 가로 형식에 맞춤 */
+  @page{size:A4 landscape;margin:8mm}
   html,body{
     width:100%!important;
     height:auto!important;
@@ -332,19 +476,17 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   }
   #root{overflow:visible!important;min-height:0!important;height:auto!important}
   /*
-   * display:none으로 형제를 지우면 문서 높이가 0으로 잡혀 macOS 인쇄 미리보기가 비는 경우가 많음.
-   * 신청서 화면(step2)에서만: 전부 visibility:hidden 후 .app-form-print만 다시 visible.
-   * html 클래스는 App.jsx에서 step===2일 때 부여 (:has() 미지원 브라우저 대비).
+   * visibility:hidden 은 보이지 않아도 박스 높이를 유지 → 인쇄 시 빈 2페이지가 자주 생김.
+   * 인쇄에 필요 없는 블록은 display:none 으로 레이아웃에서 제거.
    */
-  html.yyc-print-source-page *,
-  html:has(.app-form-print) *{
-    visibility:hidden;
+  html.yyc-print-source-page .container > .summary-card,
+  html:has(.app-form-print) .container > .summary-card{
+    display:none!important
   }
-  html.yyc-print-source-page .app-form-print,
-  html.yyc-print-source-page .app-form-print *,
-  html:has(.app-form-print) .app-form-print,
-  html:has(.app-form-print) .app-form-print *{
-    visibility:visible;
+  /* 포털 모달에서 인쇄: #root(요약 카드)가 남으면 빈 페이지 — body 클래스로 확실히 제거 */
+  body.yyc-contract-modal-open #root,
+  body:has(> .contract-preview-backdrop) #root{
+    display:none!important
   }
   html.yyc-print-source-page .app-form-print,
   html:has(.app-form-print) .app-form-print{
@@ -355,7 +497,19 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
     max-width:100%!important;
     pointer-events:auto!important;
     background:#fff!important;
-    overflow:visible!important
+    overflow:visible!important;
+    margin:0!important;
+    padding:0!important;
+    zoom:0.78;
+    -webkit-print-color-adjust:economy;
+    print-color-adjust:economy
+  }
+  html.yyc-print-source-page .app-form-print > .afp:last-child,
+  html:has(.app-form-print) .app-form-print > .afp:last-child{
+    page-break-after:auto!important;
+    break-after:auto!important;
+    margin-bottom:0!important;
+    padding-bottom:0!important
   }
   html.yyc-print-source-page .container,
   html:has(.app-form-print) .container{
@@ -370,14 +524,54 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   html:has(.app-form-print) .app-form-page{
     width:100%!important;
     max-width:100%!important;
-    min-height:0!important
+    min-height:0!important;
+    page-break-after:auto!important;
+    page-break-inside:auto!important;
+    break-inside:auto!important
   }
-  html.yyc-print-source-page .afp:not(:last-child),
-  html.yyc-print-source-page .app-form-page:not(:last-child),
-  html:has(.app-form-print) .afp:not(:last-child),
-  html:has(.app-form-print) .app-form-page:not(:last-child){page-break-after:always}
-  html.yyc-print-source-page .afp:last-child,
-  html.yyc-print-source-page .app-form-page:last-child,
-  html:has(.app-form-print) .afp:last-child,
-  html:has(.app-form-print) .app-form-page:last-child{page-break-after:auto}
+  html.yyc-print-source-page .afc,
+  html:has(.app-form-print) .afc{
+    overflow:visible!important;
+    gap:1.5mm!important
+  }
+  html.yyc-print-source-page .af-hdr-nm,
+  html:has(.app-form-print) .af-hdr-nm{font-size:16pt!important}
+  html.yyc-print-source-page .af-hdr-sub,
+  html:has(.app-form-print) .af-hdr-sub{font-size:9pt!important}
+  html.yyc-print-source-page .af-fp img,
+  html:has(.app-form-print) .af-fp img{max-height:42mm!important}
+  html.yyc-print-source-page .af-at-img,
+  html:has(.app-form-print) .af-at-img{max-height:32mm!important}
+  html.yyc-print-source-page .aft th,
+  html.yyc-print-source-page .aft td,
+  html:has(.app-form-print) .aft th,
+  html:has(.app-form-print) .aft td{padding:1mm 1.5mm!important;font-size:7pt!important}
+  html.yyc-print-source-page .af-at th,
+  html.yyc-print-source-page .af-at td,
+  html:has(.app-form-print) .af-at th,
+  html:has(.app-form-print) .af-at td{padding:1mm 1.5mm!important;font-size:6.5pt!important}
+  .contract-preview-backdrop{
+    position:static!important;
+    inset:auto!important;
+    background:transparent!important;
+    padding:0!important;
+    margin:0!important;
+    min-height:0!important;
+    display:block!important
+  }
+  .contract-preview-panel{
+    box-shadow:none!important;
+    max-height:none!important;
+    min-height:0!important;
+    width:100%!important;
+    max-width:none!important;
+    border-radius:0!important;
+    overflow:visible!important
+  }
+  .contract-preview-head,.contract-preview-foot{display:none!important}
+  .contract-preview-body{
+    padding:0!important;
+    background:#fff!important;
+    overflow:visible!important
+  }
 }
