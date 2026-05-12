@@ -911,7 +911,7 @@ function getAppliances(t) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
-function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho, phoneLast4 }) {
+function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
   if(!typeData) return null;
   const f=(n)=>String.fromCharCode(8361)+n.toLocaleString('ko-KR');
   const on=(id)=>sel[id]!==undefined;
@@ -1053,12 +1053,7 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho, pho
           <div className="af-tc" style={ {marginTop:'4mm',fontSize:'8pt',color:'#475569'} }>
             <div style={ {marginBottom:'1mm'} }>상기 옵션을 신청합니다.</div>
             <div className="af-b af-contractor-footer-line" style={ {fontSize:'9pt'} }>
-              <span className="af-contractor-footer-text">
-                계약자: {contractor}
-                {phoneLast4 && String(phoneLast4).replace(/\D/g, "").length === 4
-                  ? ` · 휴대폰 뒷자리: ${formatPhoneTailDisplay(phoneLast4)}`
-                  : ""}
-              </span>
+              <span className="af-contractor-footer-text">계약자: {contractor}</span>
               <span className="af-seal">(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
             </div>
             <div style={ {color:'#64748b',fontSize:'8pt',marginTop:'1mm'} }>{dateStr}</div>
@@ -1519,7 +1514,7 @@ export function App() {
   }
 
   const contractForm = (
-    <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho} phoneLast4={phoneLast4} />
+    <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho} />
   );
 
   const contractPreviewModal =
@@ -1567,7 +1562,6 @@ export function App() {
           <div className="info-row"><span>평형</span><span>{typeData.name}</span></div>
           <div className="info-row"><span>동 / 호</span><span>{dong}동 {ho}호</span></div>
           <div className="info-row"><span>계약자</span><span>{contractor}</span></div>
-          <div className="info-row"><span>휴대폰 뒷자리</span><span>{formatPhoneTailDisplay(phoneLast4)}</span></div>
         </div>
         <table className="summary-table">
           <thead><tr><th>구분</th><th>옵션 내용</th><th>금액</th></tr></thead>
@@ -1606,10 +1600,7 @@ export function App() {
             </div>
           </div>
           <div className="sign-row">
-            <span>
-              계약자: {contractor}
-              {phoneLast4.length === 4 ? ` · 휴대폰 뒷자리: ${phoneLast4}` : ""}
-            </span>
+            <span>계약자: {contractor}</span>
             <span className="sign-seal-wrap">(인){signData && <img className="sign-inline-img" src={signData} alt="서명"/>}</span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
           </div>
           <div className="sign-date">{new Date().toLocaleDateString('ko-KR')}</div>
