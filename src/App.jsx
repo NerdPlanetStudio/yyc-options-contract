@@ -8,6 +8,13 @@ import {
   accumulateCsvOptionAmounts
 } from "./applicationCsvShared.js";
 import { TYPES, getAppliances } from "./optionsCatalog.js";
+import {
+  TEMPLATE_SHEET1_NAME,
+  templateSheet1HeadersMatch,
+  findTemplateSheet1AppendRowIndex,
+  nextTemplateSheet1Sequence,
+  buildTemplateSheet1DataRow
+} from "./applicationTemplateSheet1.js";
 
 /** 로컬에 `allowedResidents.json`이 있으면 우선(비공개), 없으면 샘플만 — 공개 저장소에 실명 DB를 올리지 않기 위함 */
 const residentJsonModules = import.meta.glob("./data/*.json", { eager: true });
@@ -602,7 +609,17 @@ export function renderAdminDashboardIfNeeded() {
 
         const xlsxDl = document.getElementById("admin-xlsx-download");
         if (xlsxDl) {
-          xlsxDl.onclick = () => downloadApplicationsXlsx(filtered.length ? filtered : rows);
+          xlsxDl.onclick = async () => {
+            xlsxDl.disabled = true;
+            const prev = xlsxDl.textContent;
+            xlsxDl.textContent = "파일 준비 중…";
+            try {
+              await downloadApplicationsXlsx(filtered.length ? filtered : rows);
+            } finally {
+              xlsxDl.disabled = false;
+              xlsxDl.textContent = prev;
+            }
+          };
         }
 
         const resetBtn = document.getElementById("admin-filter-reset");
@@ -811,7 +828,7 @@ function buildApplicationsExportAoa(rows) {
   return [header, ...dataRows];
 }
 
-function downloadApplicationsXlsx(rows) {
+function downloadFallbackWideSheetXlsx(rows) {
   const aoa = buildApplicationsExportAoa(rows);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
@@ -826,6 +843,61 @@ function downloadApplicationsXlsx(rows) {
   a.download = `요진와이시티_옵션신청_동일품목열_${new Date().toISOString().slice(0, 10)}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** `public/templates/yyc-contract-pivot-template.xlsx` — Desktop 복사본과 동일, `Sheet1 (2)`에 접수 행 추가 */
+async function downloadApplicationsXlsx(rows) {
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  const templateUrl = new URL("templates/yyc-contract-pivot-template.xlsx", window.location.origin + base).href;
+
+  try {
+    const res = await fetch(templateUrl, { cache: "no-store" });
+    if (!res.ok) throw new Error(`템플릿 HTTP ${res.status}`);
+    const ab = await res.arrayBuffer();
+    const wb = XLSX.read(ab, { type: "array" });
+    const ws = wb.Sheets[TEMPLATE_SHEET1_NAME];
+    if (!ws) {
+      alert(`템플릿에 시트 "${TEMPLATE_SHEET1_NAME}" 가 없습니다. public/templates/yyc-contract-pivot-template.xlsx 를 확인해 주세요.`);
+      downloadFallbackWideSheetXlsx(rows);
+      return;
+    }
+
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+    if (!templateSheet1HeadersMatch(aoa[0])) {
+      alert(
+        "템플릿의 Sheet1 (2) 1행 헤더가 예상과 다릅니다. 복사본.xlsx 최신본으로 public/templates/yyc-contract-pivot-template.xlsx 를 다시 넣어 주세요."
+      );
+      downloadFallbackWideSheetXlsx(rows);
+      return;
+    }
+
+    const appendAt = findTemplateSheet1AppendRowIndex(aoa);
+    let seq = nextTemplateSheet1Sequence(aoa, appendAt);
+    const newRows = rows.map((r) => {
+      const row = buildTemplateSheet1DataRow(r, seq);
+      seq += 1;
+      return row;
+    });
+
+    XLSX.utils.sheet_add_aoa(ws, newRows, { origin: { r: appendAt, c: 0 } });
+
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([buf], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `임동우_옵션전자계약_동호및옵션금액_복사본_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error(e);
+    alert(
+      "복사본 템플릿을 불러오지 못했습니다. public/templates/yyc-contract-pivot-template.xlsx 가 있는지 확인합니다. 임시로 넓은 열 형식으로 받습니다."
+    );
+    downloadFallbackWideSheetXlsx(rows);
+  }
 }
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
