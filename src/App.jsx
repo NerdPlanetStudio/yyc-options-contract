@@ -1582,7 +1582,7 @@ export function App() {
         <div className="summary-sign">
           <p>상기 옵션을 신청합니다.</p>
           <div className="sign-pad-wrap">
-            <div className="sign-pad-label">✒️ 아래에 서명해 주세요</div>
+            <div className="sign-pad-label">하단에 정자 서명을 부탁드립니다.</div>
             {signData ? (
               <img src={signData} alt="서명" className="sign-img" />
             ) : (
