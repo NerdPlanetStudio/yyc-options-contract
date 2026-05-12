@@ -57,7 +57,11 @@ if (vals.length === 0) {
 }
 
 console.log(
-  `-- ${vals.length} rows from allowedResidents.json\n` +
+  "-- =============================================================================\n" +
+    "-- 아래 INSERT 전에 반드시 실행: 프로젝트의 supabase/sql/yyc_resident_registry.sql 전체\n" +
+    "-- (테이블 yyc_resident_registry + 함수 verify_yyc_resident 가 없으면 relation does not exist)\n" +
+    "-- =============================================================================\n\n" +
+    `-- ${vals.length} rows from allowedResidents.json\n` +
     "INSERT INTO public.yyc_resident_registry (dong, ho, contractor_name, phone_tail, type_key) VALUES\n" +
     vals
       .map(
