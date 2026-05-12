@@ -467,20 +467,67 @@ function csvEscape(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+/** CSV용 — 선택 옵션을 한 셀에 읽기 쉽게 (줄바꿈 없음) */
+function formatSelectedOptionsForCsv(selected_options) {
+  const arr = Array.isArray(selected_options) ? selected_options : [];
+  if (arr.length === 0) return "미선택(전체 미선택형)";
+  return arr
+    .map((o) => {
+      const cat = (o.category || "").trim();
+      const lab = (o.label || o.name || "-").trim();
+      const price = Number(o.price || 0).toLocaleString("ko-KR");
+      return cat ? `${cat}: ${lab} (${price}원)` : `${lab} (${price}원)`;
+    })
+    .join(" | ");
+}
+
 function downloadApplicationsCsv(rows) {
-  const header = ["접수번호","접수일시","고객명","휴대폰뒷자리","동","호","타입","총액","상태","메모"];
-  const body = rows.map((r) => [
-    r.receipt_no,
-    formatAdminDate(r.created_at),
-    r.customer_name,
-    formatPhoneTailDisplay(r.phone),
-    r.dong,
-    r.ho,
-    r.unit_type,
-    r.total_price,
-    r.status,
-    r.admin_memo
-  ].map(csvEscape).join(","));
+  const header = [
+    "접수번호",
+    "접수일시",
+    "최종수정일시",
+    "고객명",
+    "휴대폰뒷자리",
+    "동",
+    "호",
+    "타입",
+    "총액",
+    "선택옵션수",
+    "인쇄여부",
+    "서명첨부",
+    "상태",
+    "생년월일",
+    "메모",
+    "옵션내역",
+    "접수ID"
+  ];
+  const body = rows.map((r) => {
+    const opts = Array.isArray(r.selected_options) ? r.selected_options : [];
+    const hasSign = Boolean(r.signature_data_url && String(r.signature_data_url).length > 32);
+    const printed =
+      r.printed === true || r.printed === "true" ? "예" : r.printed === false || r.printed === "false" ? "아니오" : "";
+    return [
+      r.receipt_no,
+      formatAdminDate(r.created_at),
+      r.updated_at ? formatAdminDate(r.updated_at) : "",
+      r.customer_name,
+      formatPhoneTailDisplay(r.phone),
+      r.dong,
+      r.ho,
+      r.unit_type,
+      r.total_price,
+      opts.length,
+      printed,
+      hasSign ? "있음" : "없음",
+      r.status,
+      r.birth_date || "",
+      r.admin_memo,
+      formatSelectedOptionsForCsv(r.selected_options),
+      r.id
+    ]
+      .map(csvEscape)
+      .join(",");
+  });
 
   const blob = new Blob(["﻿" + [header.map(csvEscape).join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
