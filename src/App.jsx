@@ -1396,7 +1396,7 @@ export function App() {
           </div>
           <h2 className="section-title">평형 선택</h2>
           <p className="resident-gate-hint">
-            <strong>동·호·성함·휴대폰 뒷 4자리·평형</strong>이 모두 등록 세대 정보와 같아야 다음 단계로 이동할 수 있습니다.
+            <strong>동·호·성함·휴대폰 뒷4자리</strong>가 모두 등록 정보와 일치해야 다음 단계로 진행 가능합니다
           </p>
           <div className="type-grid">
             {TYPES.map(t => <button key={t.key} className={'type-btn'+(typeKey===t.key?' active':'')} onClick={()=>resetType(t.key)}>{t.name}</button>)}
