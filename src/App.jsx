@@ -828,6 +828,12 @@ function buildApplicationsExportAoa(rows) {
   return [header, ...dataRows];
 }
 
+/** 엑셀 저장 파일명 — 서울 기준 `YYYY_MM_DD` (예: 2026_05_10) */
+function adminXlsxFilenameDateStamp() {
+  const s = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+  return s.replace(/-/g, "_");
+}
+
 function downloadFallbackWideSheetXlsx(rows) {
   const aoa = buildApplicationsExportAoa(rows);
   const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -840,7 +846,7 @@ function downloadFallbackWideSheetXlsx(rows) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `요진와이시티_옵션신청_동일품목열_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `${adminXlsxFilenameDateStamp()}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -888,7 +894,7 @@ async function downloadApplicationsXlsx(rows) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `임동우_옵션전자계약_동호및옵션금액_복사본_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `${adminXlsxFilenameDateStamp()}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
