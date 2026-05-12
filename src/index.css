@@ -33,10 +33,23 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .header-bar{display:flex;justify-content:space-between;align-items:center;background:#1e3a5f;color:#fff;padding:.875rem 1.25rem;border-radius:.75rem;margin-bottom:1rem;position:sticky;top:0;z-index:10}
 .header-info{font-size:.875rem}
 .header-total{font-size:1.125rem;font-weight:800}
-.option-layout{display:flex;gap:1.5rem;align-items:flex-start}
+.option-layout{display:flex;gap:1.5rem;align-items:stretch}
 .option-main{flex:1;min-width:0}
-.sidebar{width:320px;flex-shrink:0}
-.sidebar-sticky{position:sticky;top:4.5rem;background:#fff;border-radius:.75rem;padding:1.25rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.sidebar{width:320px;flex-shrink:0;display:flex;flex-direction:column}
+.sidebar-sticky{
+  position:sticky;
+  top:4.5rem;
+  align-self:flex-start;
+  width:100%;
+  max-height:calc(100dvh - 5.25rem - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  z-index:5;
+  background:#fff;
+  border-radius:.75rem;
+  padding:1.25rem;
+  box-shadow:0 1px 3px rgba(0,0,0,.08)
+}
 .sidebar-sticky h3{font-size:1rem;margin-bottom:.75rem;color:#1e3a5f}
 .sidebar-item{display:flex;justify-content:space-between;font-size:.8125rem;padding:.375rem 0;border-bottom:1px solid #f1f5f9;gap:.5rem}
 .sidebar-item span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
