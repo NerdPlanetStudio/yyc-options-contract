@@ -929,7 +929,7 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
         </tr></thead><tbody>
           <tr><td>{opt.base||'—'}</td><td>{opt.label}</td></tr>
           <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
-          <tr><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!s}/></span></td><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={s}/></span></td></tr>
+          <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!s}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={s}/></span></td></tr>
         </tbody></table>
         {opt.notes&&<div className="af-notes">{opt.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
       </div>
@@ -950,7 +950,7 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
           </tr>}
           <tr><td>{opt.base||'—'}</td><td>{opt.label}</td></tr>
           <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
-          <tr><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!s}/></span></td><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={s}/></span></td></tr>
+          <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!s}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={s}/></span></td></tr>
         </tbody></table>
         {opt.notes&&<div className="af-notes">{opt.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
       </div>
@@ -962,9 +962,9 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
       <React.Fragment key={it.id}>
         <tr><td rowSpan={2}><div style={ {fontWeight:600} }>{it.name}</div><div style={ {fontSize:'6.5pt',color:'#666'} }>({it.model})</div></td>
           <td><span className="af-lb">미선택형</span> {it.base||'—'}</td>
-          <td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!s}/></span></td></tr>
+          <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!s}/></span></td></tr>
         <tr><td><span className="af-ls">선택형</span> 공급금액: {f(it.price)}{it.note&&<span style={ {fontSize:'6pt',color:'#c00',marginLeft:'1mm'} }>{it.note}</span>}</td>
-          <td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={s}/></span></td></tr>
+          <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={s}/></span></td></tr>
       </React.Fragment>
     );
   };
@@ -1001,9 +1001,9 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
           <table className="af-at"><thead><tr><th style={ {width:'28%'} }>품목</th><th>미선택형 / 선택형</th><th style={ {width:'18%'} }>계약자 확인</th></tr></thead><tbody>
             <tr><td rowSpan={2}><div style={ {fontWeight:600} }>냉장고패키지</div><div className="af-sg2">냉장고: 삼성 RR40C7995AP<br/>냉동고: 삼성 RZ34C7965AP<br/>김치냉장고: 삼성 RQ34C7945AP</div></td>
               <td><span className="af-lb">미선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/N4lwIZD.png"/><div className="af-pr">—</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!on('a_fr')}/></span></td></tr>
+              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on('a_fr')}/></span></td></tr>
             <tr><td><span className="af-ls">선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/wFVmKCn.png"/><div className="af-pr">공급금액: {f(7300000)}</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={on('a_fr')}/></span></td></tr>
+              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on('a_fr')}/></span></td></tr>
             {bathApps.map(it=><AppRow key={it.id} it={it}/>)}
           </tbody></table>
           <div className="af-notes">※ 가전옵션 제품은 설치시점에 단종 등 사유로 동등 이상 제품 변경 가능<br/>※ 냉장고패키지 선택시 냉장/냉동/김치 순 배열 고정, 도어방향은 설치 위치에 따라 다를 수 있음</div>
@@ -1034,11 +1034,11 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
                 <td className="af-tc">{c1.img?<img src={c1.img} className="af-fw"/>:'—'}</td>
               </tr><tr><td>—</td><td>{c1.label}</td></tr>
               <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c1.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!on(c1.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={on(c1.id)}/></span></td></tr>
+              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c1.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c1.id)}/></span></td></tr>
               </React.Fragment>}
               {c2&&<React.Fragment><tr style={ {borderTop:'1pt solid #666'} }><td>—</td><td>{c2.label}</td></tr>
               <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c2.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={!on(c2.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row">계약자: <Seal active={on(c2.id)}/></span></td></tr>
+              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c2.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c2.id)}/></span></td></tr>
               </React.Fragment>}
             </tbody></table>
             {c2&&c2.notes&&<div className="af-notes">{c2.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
@@ -1053,7 +1053,7 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
           <div className="af-tc" style={ {marginTop:'4mm',fontSize:'8pt',color:'#475569'} }>
             <div style={ {marginBottom:'1mm'} }>상기 옵션을 신청합니다.</div>
             <div className="af-b af-contractor-footer-line" style={ {fontSize:'9pt'} }>
-              <span className="af-contractor-footer-text">계약자: {contractor}</span>
+              <span className="af-contractor-footer-text"><span className="af-contractor-label">계약자:</span> {contractor}</span>
               <span className="af-seal">(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
             </div>
             <div style={ {color:'#64748b',fontSize:'8pt',marginTop:'1mm'} }>{dateStr}</div>
@@ -1600,7 +1600,7 @@ export function App() {
             </div>
           </div>
           <div className="sign-row">
-            <span>계약자: {contractor}</span>
+            <span><span className="af-contractor-label">계약자:</span> {contractor}</span>
             <span className="sign-seal-wrap">(인){signData && <img className="sign-inline-img" src={signData} alt="서명"/>}</span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
           </div>
           <div className="sign-date">{new Date().toLocaleDateString('ko-KR')}</div>
