@@ -542,7 +542,7 @@ export function renderAdminDashboardIfNeeded() {
       return;
     }
 
-    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.<br/><span style="opacity:.95;font-size:.9em">아래 흰색 목록 카드 맨 위 필터 줄에 <strong>엑셀(.xlsx) 내려받기</strong>가 있습니다. (파란 영역에는 새로고침·로그아웃만 표시됩니다.)</span></p></div><div class="admin-actions"><button type="button" class="admin-btn secondary" id="admin-refresh">새로고침</button><button type="button" class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card" id="yyc-admin-list-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
+    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.</p></div><div class="admin-actions"><button type="button" class="admin-btn secondary" id="admin-refresh">새로고침</button><button type="button" class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card" id="yyc-admin-list-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
 
     document.getElementById("admin-logout").onclick = () => {
       clearAdminSession();
