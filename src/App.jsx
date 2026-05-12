@@ -108,6 +108,15 @@ async function verifyResidentForGate(dong, ho, contractorName, phoneLast4) {
   throw new Error((rpcErrText || "세대 검증 서버를 호출하지 못했습니다.") + hint);
 }
 
+/** 게이트용과 동일 로직이나, 자동 평형 채우기용 — 절대 throw 하지 않음 */
+async function lookupResidentTypeQuiet(dong, ho, contractorName, phoneLast4) {
+  try {
+    return await verifyResidentForGate(dong, ho, contractorName, phoneLast4);
+  } catch {
+    return matchAllowedResident(dong, ho, contractorName, phoneLast4);
+  }
+}
+
 /** 예: YYC-2026-00004 — DB 함수가 아직 옛 버전일 때 */
 function looksLikeLegacyYycReceiptNo(s) {
   const t = String(s || "").trim();
@@ -1123,6 +1132,43 @@ export function App() {
       document.body.style.overflow = prevOverflow;
     };
   }, [noticeModal]);
+
+  /** 계약자 4항목이 등록부와 일치하면 평형(typeKey) 자동 선택 */
+  useEffect(() => {
+    if (step !== 0) return;
+    const d = String(dong ?? "").replace(/\D/g, "");
+    const h = String(ho ?? "").replace(/\D/g, "");
+    const name = String(contractor ?? "")
+      .trim()
+      .replace(/\s+/g, " ");
+    const p = String(phoneLast4 ?? "").replace(/\D/g, "");
+    if (!d || !h || !name || p.length !== 4) return;
+
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      lookupResidentTypeQuiet(dong, ho, contractor, phoneLast4).then((row) => {
+        if (cancelled) return;
+        if (row?.typeKey) {
+          setTypeKey((prev) => {
+            if (prev === row.typeKey) return prev;
+            setSel({});
+            return row.typeKey;
+          });
+        } else {
+          setTypeKey((prev) => {
+            if (!prev) return prev;
+            setSel({});
+            return "";
+          });
+        }
+      });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [step, dong, ho, contractor, phoneLast4]);
 
   const startDraw = useCallback((e) => {
     const canvas = canvasRef.current; if(!canvas) return;
