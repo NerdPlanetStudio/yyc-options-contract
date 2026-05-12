@@ -1,5 +1,13 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
+import * as XLSX from "xlsx";
+import {
+  parseSelectedOptions,
+  sumSelectedOptionsPrices,
+  buildCsvOptionColumnDefs,
+  accumulateCsvOptionAmounts
+} from "./applicationCsvShared.js";
+import { TYPES, getAppliances } from "./optionsCatalog.js";
 
 /** 로컬에 `allowedResidents.json`이 있으면 우선(비공개), 없으면 샘플만 — 공개 저장소에 실명 DB를 올리지 않기 위함 */
 const residentJsonModules = import.meta.glob("./data/*.json", { eager: true });
@@ -174,11 +182,17 @@ async function fetchNextReceiptNoFromSupabase() {
 
 /** 신청 저장용 — React 상태 기준( DOM 미동기·빈 RPC 응답 이슈 방지 ) */
 function buildApplicationPayloadFromState({ dong, ho, contractor, phoneLast4, unitType, selectedList, total, signData, receiptNo }) {
-  const selected_options = selectedList.map((o) => ({
-    category: o.cat,
-    label: (o.label || o.name || "").trim(),
-    price: Number(o.price) || 0
-  }));
+  const selected_options = selectedList.map((o) => {
+    const lab = (o.label || o.name || "").trim();
+    const cat = (o.cat || "").trim();
+    return {
+      option_id: o.id,
+      option_key: `${o.id}|${cat}|${lab}`,
+      category: o.cat,
+      label: lab,
+      price: Number(o.price) || 0
+    };
+  });
   const phone = String(phoneLast4 ?? "").replace(/\D/g, "").slice(0, 4);
   return {
     receipt_no: receiptNo,
@@ -436,7 +450,7 @@ function installAdminStyles() {
 
   const style = document.createElement("style");
   style.id = "yyc-admin-style";
-  style.textContent = `.admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}.admin-shell{max-width:1200px;margin:0 auto}.admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.admin-title h1{font-size:2.5rem;font-weight:800;margin:0 0 .75rem;letter-spacing:-.03em;color:#fff}.admin-title p{font-size:1rem;opacity:.85;margin:0;color:#fff}.admin-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem}.admin-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08);border:0;box-sizing:border-box}.admin-login{width:min(440px,calc(100vw - 2rem));margin:12vh auto 0;text-align:left;overflow:hidden}.admin-login .admin-title{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;margin:-2rem -2rem 1.5rem;padding:2rem 1.5rem;border-radius:1rem 1rem 0 0}.admin-login .admin-title h1{font-size:1.75rem;margin:0 0 .5rem;color:#fff}.admin-login .admin-title p{font-size:.875rem;color:#fff;opacity:.85}.admin-field{display:flex;flex-direction:column;gap:.45rem;margin-bottom:1rem}.admin-field label{font-size:.875rem;font-weight:700;color:#1e3a5f}.admin-input,.admin-select,.admin-textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:.5rem;padding:.675rem .875rem;font-size:.9375rem;background:#fff;color:#1e293b;outline:none;transition:border-color .2s,box-shadow .2s}.admin-input:focus,.admin-select:focus,.admin-textarea:focus{border-color:#1e3a5f;box-shadow:0 0 0 3px rgba(30,58,95,.12)}.admin-textarea{min-height:100px;resize:vertical}.admin-btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:.5rem;background:#1e3a5f;color:#fff;font-size:.9375rem;font-weight:800;padding:.75rem 1.25rem;cursor:pointer;transition:background .2s,border-color .2s;text-decoration:none}.admin-btn:hover{background:#2c5282}.admin-btn.secondary{background:#fff;color:#475569;border:1px solid #cbd5e1}.admin-btn.secondary:hover{background:#f8fafc;border-color:#94a3b8}.admin-btn.danger{background:#991b1b;color:#fff}.admin-btn.danger:hover{background:#b91c1c;color:#fff}.admin-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto;gap:.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e2e8f0}.admin-layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:1rem;align-items:start}.admin-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}.admin-table{width:100%;border-collapse:collapse;min-width:1080px}.admin-table th{background:#1e3a5f;color:#fff;text-align:left;font-size:.8125rem;padding:.75rem;white-space:nowrap;font-weight:700}.admin-table td{border-bottom:1px solid #e2e8f0;padding:.75rem;font-size:.875rem;vertical-align:middle}.admin-table tr{cursor:pointer;transition:background .15s}.admin-table tr:hover{background:#f8fafc}.admin-table tr.active{background:#eef2ff}.admin-badge{display:inline-block;border-radius:2rem;padding:.25rem .75rem;font-size:.75rem;font-weight:800;background:#e0f2fe;color:#075985;white-space:nowrap}.admin-badge.done{background:#dcfce7;color:#166534}.admin-badge.cancel{background:#fee2e2;color:#991b1b}.admin-price{text-align:right;font-weight:800;color:#1e3a5f;white-space:nowrap}.admin-detail{position:sticky;top:1rem}.admin-detail-empty{text-align:center;color:#94a3b8;padding:3rem 1rem}.admin-detail h2{font-size:1.125rem;color:#1e3a5f;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}.admin-kv{display:grid;grid-template-columns:90px 1fr;gap:.5rem .75rem;font-size:.875rem;margin-bottom:1rem}.admin-kv b{color:#64748b}.admin-options{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:.5rem 0;margin:1rem 0;max-height:240px;overflow:auto}.admin-option{display:flex;justify-content:space-between;gap:.75rem;font-size:.8125rem;padding:.5rem 0;border-bottom:1px dashed #e2e8f0}.admin-option:last-child{border-bottom:0}.admin-sign{max-width:180px;max-height:80px;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;display:block;margin-top:.5rem}.admin-error{color:#b91c1c;font-size:.875rem;margin-top:.75rem;white-space:pre-wrap}.admin-loading{color:#64748b;font-size:.875rem;margin:.75rem 0}@media(max-width:900px){.admin-filters{grid-template-columns:1fr 1fr}.admin-layout{grid-template-columns:1fr}.admin-detail{position:static}.admin-title h1{font-size:1.75rem}.admin-top{padding:2rem 1rem}.admin-actions{margin-top:1rem}}`;
+  style.textContent = `.admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}.admin-shell{max-width:1200px;margin:0 auto}.admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}.admin-title h1{font-size:2.5rem;font-weight:800;margin:0 0 .75rem;letter-spacing:-.03em;color:#fff}.admin-title p{font-size:1rem;opacity:.85;margin:0;color:#fff}.admin-actions{display:flex;justify-content:center;gap:.5rem;flex-wrap:wrap;margin-top:1.25rem}.admin-card{background:#fff;border-radius:1rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.08);border:0;box-sizing:border-box}.admin-login{width:min(440px,calc(100vw - 2rem));margin:12vh auto 0;text-align:left;overflow:hidden}.admin-login .admin-title{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;margin:-2rem -2rem 1.5rem;padding:2rem 1.5rem;border-radius:1rem 1rem 0 0}.admin-login .admin-title h1{font-size:1.75rem;margin:0 0 .5rem;color:#fff}.admin-login .admin-title p{font-size:.875rem;color:#fff;opacity:.85}.admin-field{display:flex;flex-direction:column;gap:.45rem;margin-bottom:1rem}.admin-field label{font-size:.875rem;font-weight:700;color:#1e3a5f}.admin-input,.admin-select,.admin-textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:.5rem;padding:.675rem .875rem;font-size:.9375rem;background:#fff;color:#1e293b;outline:none;transition:border-color .2s,box-shadow .2s}.admin-input:focus,.admin-select:focus,.admin-textarea:focus{border-color:#1e3a5f;box-shadow:0 0 0 3px rgba(30,58,95,.12)}.admin-textarea{min-height:100px;resize:vertical}.admin-btn{display:inline-flex;align-items:center;justify-content:center;border:none;border-radius:.5rem;background:#1e3a5f;color:#fff;font-size:.9375rem;font-weight:800;padding:.75rem 1.25rem;cursor:pointer;transition:background .2s,border-color .2s;text-decoration:none}.admin-btn:hover{background:#2c5282}.admin-btn.secondary{background:#fff;color:#475569;border:1px solid #cbd5e1}.admin-btn.secondary:hover{background:#f8fafc;border-color:#94a3b8}.admin-btn.danger{background:#991b1b;color:#fff}.admin-btn.danger:hover{background:#b91c1c;color:#fff}.admin-filters{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr auto auto;gap:.75rem;margin-bottom:1rem;padding-bottom:1rem;border-bottom:2px solid #e2e8f0}.admin-layout{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:1rem;align-items:start}.admin-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:.75rem;background:#fff}.admin-table{width:100%;border-collapse:collapse;min-width:1080px}.admin-table th{background:#1e3a5f;color:#fff;text-align:left;font-size:.8125rem;padding:.75rem;white-space:nowrap;font-weight:700}.admin-table td{border-bottom:1px solid #e2e8f0;padding:.75rem;font-size:.875rem;vertical-align:middle}.admin-table tr{cursor:pointer;transition:background .15s}.admin-table tr:hover{background:#f8fafc}.admin-table tr.active{background:#eef2ff}.admin-badge{display:inline-block;border-radius:2rem;padding:.25rem .75rem;font-size:.75rem;font-weight:800;background:#e0f2fe;color:#075985;white-space:nowrap}.admin-badge.done{background:#dcfce7;color:#166534}.admin-badge.cancel{background:#fee2e2;color:#991b1b}.admin-price{text-align:right;font-weight:800;color:#1e3a5f;white-space:nowrap}.admin-detail{position:sticky;top:1rem}.admin-detail-empty{text-align:center;color:#94a3b8;padding:3rem 1rem}.admin-detail h2{font-size:1.125rem;color:#1e3a5f;margin:0 0 1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0}.admin-kv{display:grid;grid-template-columns:90px 1fr;gap:.5rem .75rem;font-size:.875rem;margin-bottom:1rem}.admin-kv b{color:#64748b}.admin-options{border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:.5rem 0;margin:1rem 0;max-height:240px;overflow:auto}.admin-option{display:flex;justify-content:space-between;gap:.75rem;font-size:.8125rem;padding:.5rem 0;border-bottom:1px dashed #e2e8f0}.admin-option:last-child{border-bottom:0}.admin-sign{max-width:180px;max-height:80px;border:1px solid #e2e8f0;border-radius:.5rem;background:#fff;display:block;margin-top:.5rem}.admin-error{color:#b91c1c;font-size:.875rem;margin-top:.75rem;white-space:pre-wrap}.admin-loading{color:#64748b;font-size:.875rem;margin:.75rem 0}@media(max-width:900px){.admin-filters{grid-template-columns:1fr 1fr}.admin-layout{grid-template-columns:1fr}.admin-detail{position:static}.admin-title h1{font-size:1.75rem}.admin-top{padding:2rem 1rem}.admin-actions{margin-top:1rem}}`;
   document.head.appendChild(style);
 }
 
@@ -463,13 +477,9 @@ function statusClass(status) {
   return "";
 }
 
-function csvEscape(value) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
-}
-
-/** CSV용 — 선택 옵션을 한 셀에 읽기 쉽게 (줄바꿈 없음) */
+/** 내보내기용 — 선택 옵션을 한 셀에 읽기 쉽게 (줄바꿈 없음) */
 function formatSelectedOptionsForCsv(selected_options) {
-  const arr = Array.isArray(selected_options) ? selected_options : [];
+  const arr = parseSelectedOptions(selected_options);
   if (arr.length === 0) return "미선택(전체 미선택형)";
   return arr
     .map((o) => {
@@ -479,63 +489,6 @@ function formatSelectedOptionsForCsv(selected_options) {
       return cat ? `${cat}: ${lab} (${price}원)` : `${lab} (${price}원)`;
     })
     .join(" | ");
-}
-
-function downloadApplicationsCsv(rows) {
-  const header = [
-    "접수번호",
-    "접수일시",
-    "최종수정일시",
-    "고객명",
-    "휴대폰뒷자리",
-    "동",
-    "호",
-    "타입",
-    "총액",
-    "선택옵션수",
-    "인쇄여부",
-    "서명첨부",
-    "상태",
-    "생년월일",
-    "메모",
-    "옵션내역",
-    "접수ID"
-  ];
-  const body = rows.map((r) => {
-    const opts = Array.isArray(r.selected_options) ? r.selected_options : [];
-    const hasSign = Boolean(r.signature_data_url && String(r.signature_data_url).length > 32);
-    const printed =
-      r.printed === true || r.printed === "true" ? "예" : r.printed === false || r.printed === "false" ? "아니오" : "";
-    return [
-      r.receipt_no,
-      formatAdminDate(r.created_at),
-      r.updated_at ? formatAdminDate(r.updated_at) : "",
-      r.customer_name,
-      formatPhoneTailDisplay(r.phone),
-      r.dong,
-      r.ho,
-      r.unit_type,
-      r.total_price,
-      opts.length,
-      printed,
-      hasSign ? "있음" : "없음",
-      r.status,
-      r.birth_date || "",
-      r.admin_memo,
-      formatSelectedOptionsForCsv(r.selected_options),
-      r.id
-    ]
-      .map(csvEscape)
-      .join(",");
-  });
-
-  const blob = new Blob(["﻿" + [header.map(csvEscape).join(","), ...body].join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `요진와이시티_옵션신청_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 export function isAdminRoute() {
@@ -589,7 +542,7 @@ export function renderAdminDashboardIfNeeded() {
       return;
     }
 
-    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.</p></div><div class="admin-actions"><button type="button" class="admin-btn secondary" id="admin-refresh">새로고침</button><button type="button" class="admin-btn secondary" id="admin-csv">CSV 다운로드</button><button type="button" class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card" id="yyc-admin-list-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
+    shell.innerHTML = `<div class="admin-top"><div class="admin-title"><h1>옵션 신청 관리자</h1><p>고객이 신청완료를 누르면 접수 기록이 이곳에 저장됩니다.<br/><span style="opacity:.95;font-size:.9em">아래 흰색 목록 카드 맨 위 필터 줄에 <strong>엑셀(.xlsx) 내려받기</strong>가 있습니다. (파란 영역에는 새로고침·로그아웃만 표시됩니다.)</span></p></div><div class="admin-actions"><button type="button" class="admin-btn secondary" id="admin-refresh">새로고침</button><button type="button" class="admin-btn danger" id="admin-logout">로그아웃</button></div></div><div class="admin-card" id="yyc-admin-list-card"><div class="admin-loading">접수 목록을 불러오는 중...</div></div>`;
 
     document.getElementById("admin-logout").onclick = () => {
       clearAdminSession();
@@ -626,7 +579,7 @@ export function renderAdminDashboardIfNeeded() {
         const kwAttr = escapeHtmlAttr(keyword);
         const dongAttr = escapeHtmlAttr(dong);
 
-        listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn danger" id="admin-filter-reset" title="저장된 모든 접수를 삭제합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
+        listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn secondary" id="admin-xlsx-download">엑셀(.xlsx) 내려받기</button><button type="button" class="admin-btn danger" id="admin-filter-reset" title="저장된 모든 접수를 삭제합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
                     <tr data-id="${r.id}" class="${selected?.id === r.id ? "active" : ""}">
                       <td style="font-size:12px;white-space:nowrap">${r.receipt_no || "-"}</td>
                       <td>${formatAdminDate(r.created_at)}</td>
@@ -646,6 +599,11 @@ export function renderAdminDashboardIfNeeded() {
           document.getElementById(id).addEventListener("input", renderRows);
           document.getElementById(id).addEventListener("change", renderRows);
         });
+
+        const xlsxDl = document.getElementById("admin-xlsx-download");
+        if (xlsxDl) {
+          xlsxDl.onclick = () => downloadApplicationsXlsx(filtered.length ? filtered : rows);
+        }
 
         const resetBtn = document.getElementById("admin-filter-reset");
         if (resetBtn) {
@@ -728,9 +686,12 @@ export function renderAdminDashboardIfNeeded() {
           return;
         }
 
-        const options = Array.isArray(selected.selected_options) ? selected.selected_options : [];
+        const options = parseSelectedOptions(selected.selected_options);
+        const optSum = sumSelectedOptionsPrices(selected.selected_options);
+        const totalNum = Number(selected.total_price) || 0;
+        const sumMatch = Math.abs(optSum - totalNum) < 0.01 ? "일치" : "불일치(점검)";
 
-        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>휴대폰 뒷자리</b><span>${formatPhoneTailDisplay(selected.phone)}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
+        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>휴대폰 뒷자리</b><span>${formatPhoneTailDisplay(selected.phone)}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>옵션금액소계</b><span class="admin-price" style="text-align:left">${formatAdminPrice(optSum)}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span><b>금액일치</b><span>${sumMatch}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
               <div class="admin-option">
                 <span><b>${o.category || "-"}</b><br>${o.label || o.name || "-"}</span>
                 <b>${formatAdminPrice(o.price)}</b>
@@ -761,7 +722,6 @@ export function renderAdminDashboardIfNeeded() {
       };
 
       shell.querySelector("#admin-refresh").onclick = renderList;
-      shell.querySelector("#admin-csv").onclick = () => downloadApplicationsCsv(filtered.length ? filtered : rows);
 
       renderRows();
     } catch (err) {
@@ -779,181 +739,93 @@ window.addEventListener("hashchange", () => {
 
 setTimeout(renderAdminDashboardIfNeeded, 0);
 
-const TYPES = [
-  {key:'43',name:'43㎡',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
-  ],ac:4700000,vent:600000,dual:false,floorPlan:'https://i.imgur.com/HiJ8Nbn.png',fridgeBaseImg:'https://i.imgur.com/FrICl3o.png',fridgeImg:'https://i.imgur.com/mHj5GjG.png'},
-  {key:'48A',name:'48㎡A',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
-  ],ac:5800000,vent:600000,dual:false,floorPlan:'https://i.imgur.com/ThftPeK.png',fridgeBaseImg:'https://i.imgur.com/Wwqgatz.png',fridgeImg:'https://i.imgur.com/CUL8p92.png'},
-  {key:'48B',name:'48㎡B',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:3800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'52A',name:'52㎡A',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2700000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:4700000,vent:600000,dual:false},
-  {key:'52B',name:'52㎡B',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2100000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'침실3 가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'52C',name:'52㎡C',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:4700000,vent:600000,dual:false},
-  {key:'55A',name:'55㎡A',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'침실1 가변형벽체(침실1/침실3 통합형)+가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'55B',name:'55㎡B',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(여닫이)',base:'',price:1600000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'침실3 가구도어+시스템선반+화장대+주방 수납장',base:'',price:4100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'59A',name:'59㎡A',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3400000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4200000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 톤에서 미세한 차이가 발생할 수 있으며, 타일 나누기는 추가 또는 변경될 수 있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생하며 제조과정에 따라 건별 주택에 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈의 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300, 가로방향) + 상판 인조대리석',price:4500000,baseImg:'https://i.imgur.com/y8vaEXd.png',img:'https://i.imgur.com/ukypmcj.png',notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000,baseImg:'https://i.imgur.com/NMrqttd.png',img:'https://i.imgur.com/Q3MsWer.png'},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59A',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합)+가구도어+시스템선반',base:'',price:1200000,baseImg:'https://i.imgur.com/lMFgSQC.png',img:'https://i.imgur.com/APPHDdE.png',group:'g59A',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']},
-  ],ac:6400000,vent:1200000,dual:true,floorPlan:'https://i.imgur.com/UW6y8Yf.png'},
-  {key:'59B',name:'59㎡B',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3300000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:3800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59B',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1200000,group:'g59B',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'59C',name:'59㎡C',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2800000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 화장대+수납장(장식장)+드레스룸도어+시스템선반',base:'',price:5300000},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59C',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1300000,group:'g59C',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'59D',name:'59㎡D',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2800000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)+화장대',base:'',price:6800000},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,group:'g59D',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장 + 화장대, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 침실2 붙박이장 옵션 선택시 공간특화(드레스룸) 선택 불가하니 참고 바랍니다']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(침실2/침실3 통합형)+가구도어+시스템선반',base:'',price:1300000,group:'g59D',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'59E',name:'59㎡E',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2500000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4600000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4600000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:5000000},
-    {id:'closet_침실3',cat:'붙박이장',label:'침실3 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실3 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'59F',name:'59㎡F',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3000000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2200000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_침실1',cat:'붙박이장',label:'침실1 붙박이장(슬라이딩)',base:'',price:3900000},
-    {id:'closet_침실2',cat:'붙박이장',label:'침실2 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 침실1 붙박이장, 침실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'65A',name:'65㎡A',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:2100000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:1800000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'실1 가구도어+시스템선반',base:'',price:1100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'65B',name:'65㎡B',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:1500000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:2200000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'실1 가구도어+시스템선반',base:'',price:2100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:4700000,vent:600000,dual:false},
-  {key:'68',name:'68㎡',opts:[
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4000000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:500000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4400000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(여닫이)',base:'',price:1600000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'실3 가구도어+시스템선반+화장대+주방 수납장',base:'',price:4100000,notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택 시 타입별 위치에 따라 가구의 방향이 상이할 수 있으니 계약 시 필히 확인하시기 바랍니다.']}
-  ],ac:5800000,vent:600000,dual:false},
-  {key:'79',name:'79㎡',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:3300000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4100000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:800000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 및 가구 특화',label:'주방 벽체 및 상판 엔지니어드 스톤 + 주방가구(아일랜드장)',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:3800000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(슬라이딩)',base:'',price:3900000},
-    {id:'closet_실2',cat:'붙박이장',label:'실2 붙박이장(여닫이)',base:'',price:1700000,group:'g79',notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장, 실2 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.','※ 공간특화(드레스룸) 옵션 선택시 침실2 붙박이장 옵션 선택 불가하니 참고 바랍니다']},
-    {id:'space',cat:'공간(드레스룸) 특화',label:'가변형벽체(실2/실3 통합형)+가구도어+시스템선반',base:'',price:1200000,group:'g79',notes:['※ 공간특화 옵션 선택 시 부위별 가구 설치 및 레이아웃이 변경될 수 있습니다.','※ 공간특화 옵션 선택시 침실2 붙박이장 옵션 선택 불가하오니 참고 바랍니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-  {key:'84',name:'84㎡',opts:[
-    {id:'wall',cat:'벽 마감재 특화',label:'벽(현관, 복도, 거실, 주방) 시트 판넬',base:'실크 벽지',price:2500000},
-    {id:'living',cat:'거실마감재 특화',label:'거실 아트월(포세린타일, 600X1200) + 포세린타일(600X600) 바닥(복도,거실,주방) + 거실 천정 조명(상간접등, 하직부등)',base:'거실 아트월(포세린타일, 600X600) + 강마루 바닥(복도,거실,주방) + 거실 천정 직부등',price:4600000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 아트월 설치 시 타일 이음새 구분이 발생되며 이음새 구분 위치 및 무늬결 및 재료분리대가 견본주택과 상이하게 설치될 수 있습니다.']},
-    {id:'bath',cat:'욕실마감재 특화',label:'벽체 : 포세린 타일(600X600)',base:'벽체 : 도기질 타일(300X600, 세로방향)',price:700000,notes:['※ 타일은 자재특성상 색상 및 무늬가 동일하지 않고 고유한 물성에 의하여 휠 발생이 생길수 있으며, 타일 나누기는 추가 또는 변경될수있습니다.','※ 욕실 벽, 바닥 타일의 줄눈 위치가 일치하지 않을 수 있으며, 줄눈 및 타일 사이즈가 일정하지 않을 수 있습니다.']},
-    {id:'kitchen',cat:'주방 마감 특화',label:'주방 벽체 및 상판 엔지니어드 스톤',base:'주방 벽체 도기질타일(600X300,가로방향)및 상판 인조대리석',price:4600000,notes:['※ 인조대리석 및 석재 / 타일 자재의 경우 제조과정에 따라 무늬 및 색상이 다소 차이가 발생 할 수 있으며, 이는 하자 사항이 아닙니다.','※ 엔지니어드스톤, 인조대리석 등의 색상, 디자인, 재질, 단차, 코너, 마감재접합부, 패턴 등은 본 공사 시 견본주택과 다소 상이할 수 있습니다.','※ 설치되는 가구의 비노출면(후면, 하부, 천장)에는 마루, 타일, 도배, 천연가공석, 엔지니어드스톤 등 마감재가 시공되지 않습니다.']},
-    {id:'closet_실1',cat:'붙박이장',label:'실1 붙박이장(슬라이딩)',base:'',price:5000000},
-    {id:'closet_실3',cat:'붙박이장',label:'실3 붙박이장(여닫이)',base:'',price:1700000,notes:['▶ 기본 품목(미선택형): 실크벽지 / 유상 품목(선택형): 실1 붙박이장, 실3 붙박이장','※ 붙박이장과 접해있는 벽, 바닥, 천장에는 마감재가 설치되지 않습니다.']}
-  ],ac:6400000,vent:1200000,dual:true},
-];
 
-function getAppliances(t) {
-  const list = [
-    {id:'a_ind',name:'3구 인덕션',model:'하츠 SSIH-3605TTLB',base:'가스쿡탑',price:400000},
-    {id:'a_oven',name:'빌트인오븐',model:'삼성 NQ36A6555CK',base:'가구(여닫이장)',price:500000},
-    {id:'a_dish',name:'식기세척기',model:'삼성 DW80F71Y1SEW',base:'가구(여닫이장)',price:1200000},
-    {id:'a_ac',name:'시스템에어컨',model:'LG',base:'-',price:t.ac,note:'*거실 및 침실'},
-    {id:'a_vent',name:'스마트복합환풍기',model:'힘펠 FHD3-C150P',base:'-',price:t.vent,note:t.vent>600000?'욕실 2개소':''},
-    {id:'a_fr',name:'냉장고패키지',model:'냉장고: 삼성 RR40C7995AP / 냉동고: 삼성 RZ34C7965AP / 김치냉장고: 삼성 RQ34C7945AP',base:'-',price:7300000,baseImg:t.fridgeBaseImg||'https://i.imgur.com/N4lwIZD.png',img:t.fridgeImg||'https://i.imgur.com/wFVmKCn.png',
-      appNotes:[
-        '※ 가전옵션 제품은 2025년 10월 기준으로 설치시점에 해당 모델의 단종(성능 개선, 디자인 변경, 기술적 사항 변경 등의 사유) 혹은 품절, 품귀 등의 사유 발생 시 동종사의 동종, 등급 이상의 제품으로 변경 제공될 수 있습니다.',
-        '※ 천정형 시스템 에어컨 설치 위치는 현장 여건에 따라 견본주택에 설치된 위치와 상이할 수 있습니다.',
-        '※ 식기세척기는 가구도어로 마감될 예정입니다.',
-        '※ 냉장고패키지 선택시 냉장, 냉동, 김치순으로 배열되며 순서는 고정이며, 냉장고 도어방향은 설치 위치에 따라 다를 수 있습니다.',
-        '※ 냉장고 상부장 및 열면(좌측 또는 우측) 수납장의 도어방향은 설치 위치에 따라 다를 수 있습니다.',
-        '※ 견본주택에 설치된 비스포크 냉장고 패널색상은 예시 색상이며, 전면패널의 색상은 1년 단위로 변경되므로 입주 6개월 전 별도의 안내를 드릴 예정입니다.',
-        '※ 관련 법규 개정 또는 검사기준에 따라 가전제품의 에너지소비효율등급은 매년 변경될 수 있습니다.',
-        '※ 주방환경(주방가구 연장 및 아일랜드장) 옵션 미선택 시 빌트인 가전선택의 제한이 있을 수 있으니 유의하시기 바랍니다.'
-      ]},
-  ];
-  if (t.dual) {
-    list.push({id:'a_bt1',name:'욕실1 비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
-    list.push({id:'a_bd1',name:'욕실1 비데',model:'대림통상 DB-4210',base:'-',price:200000});
-    list.push({id:'a_bt2',name:'욕실2 비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
-    list.push({id:'a_bd2',name:'욕실2 비데',model:'대림통상 DB-4210',base:'-',price:200000});
-  } else {
-    list.push({id:'a_bt',name:'비데일체형 양변기',model:'대림바스 DST-690',base:'-',price:700000});
-    list.push({id:'a_bd',name:'비데',model:'대림통상 DB-4210',base:'-',price:200000});
+/** 관리자 엑셀 — 열 구성·순서는 `TYPES`+`getAppliances`와 동일(신청 화면 품목과 1:1) */
+const EXPORT_COMPLEX_NAME = "청량리역 요진 와이시티";
+let __csvOptionColumnDefs = null;
+function getApplicationCsvOptionColumnDefs() {
+  if (!__csvOptionColumnDefs) {
+    __csvOptionColumnDefs = buildCsvOptionColumnDefs(TYPES, getAppliances);
   }
-  return list;
+  return __csvOptionColumnDefs;
+}
+
+function xlsxAmountCell(n) {
+  const v = Number(n) || 0;
+  return v === 0 ? "" : v;
+}
+
+function buildApplicationsExportAoa(rows) {
+  const defs = getApplicationCsvOptionColumnDefs();
+  const header = [
+    "순번",
+    "관리번호",
+    "단지",
+    "타입",
+    "동",
+    "호",
+    "계약자",
+    "휴대폰 번호 뒷자리",
+    ...defs.map((d) => d.header),
+    "기타유상",
+    "총액",
+    "금액일치",
+    "접수일시",
+    "상태",
+    "생년월일",
+    "메모",
+    "옵션내역",
+    "접수ID"
+  ];
+  const dataRows = rows.map((r, rowIdx) => {
+    const optSum = sumSelectedOptionsPrices(r.selected_options);
+    const totalNum = Number(r.total_price) || 0;
+    const sumMatch = Math.abs(optSum - totalNum) < 0.01 ? "일치" : "불일치(점검)";
+    const optLine =
+      r.selected_options_summary && String(r.selected_options_summary).trim()
+        ? String(r.selected_options_summary).trim()
+        : formatSelectedOptionsForCsv(r.selected_options);
+    const { amounts, extra } = accumulateCsvOptionAmounts(r.selected_options, defs);
+    const pivotCells = amounts.map(xlsxAmountCell);
+    return [
+      rowIdx + 1,
+      r.receipt_no ?? "",
+      EXPORT_COMPLEX_NAME,
+      r.unit_type ?? "",
+      r.dong ?? "",
+      r.ho ?? "",
+      r.customer_name ?? "",
+      formatPhoneTailDisplay(r.phone),
+      ...pivotCells,
+      xlsxAmountCell(extra),
+      totalNum,
+      sumMatch,
+      formatAdminDate(r.created_at),
+      r.status ?? "",
+      r.birth_date || "",
+      r.admin_memo ?? "",
+      optLine,
+      r.id ?? ""
+    ];
+  });
+  return [header, ...dataRows];
+}
+
+function downloadApplicationsXlsx(rows) {
+  const aoa = buildApplicationsExportAoa(rows);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "접수동기화");
+  const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([buf], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `요진와이시티_옵션신청_동일품목열_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
