@@ -6,6 +6,8 @@ const residentJsonModules = import.meta.glob("./data/*.json", { eager: true });
 const realJson = Object.entries(residentJsonModules).find(([p]) => /\/allowedResidents\.json$/.test(p));
 const sampleJson = Object.entries(residentJsonModules).find(([p]) => /allowedResidents\.sample\.json$/.test(p));
 const allowedResidents = realJson?.[1]?.default ?? sampleJson?.[1]?.default ?? [];
+/** GitHub Pages·CI 빌드 등: 실제 `allowedResidents.json` 없이 샘플만 묶인 경우 */
+const IS_DEMO_RESIDENT_ONLY = !realJson && Boolean(sampleJson);
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://rjcrywtpsjehobckrqjj.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-HuVy_kanJ9qo-KrSGXXlA_bPn1nx5J";
@@ -1232,6 +1234,12 @@ export function App() {
           <p className="hero-sub">멀티플러스 옵션 전자 신청 시스템</p>
         </header>
         <div className="form-card">
+          {IS_DEMO_RESIDENT_ONLY && (
+            <p className="gate-demo-hint" role="status">
+              이 공개 페이지는 개인정보 보호를 위해 <strong>데모 등록 세대 1건</strong>만 연결되어 있습니다. 다음만 통과합니다:{" "}
+              <strong>999동 · 9999호 · 데모세대 · 휴대폰 뒤 0000 · 평형 59㎡A</strong>. 실제 동·호로는 불일치 안내가 뜹니다.
+            </p>
+          )}
           <div className="contractor-form-center">
             <h2 className="section-title">계약자 정보</h2>
             <div className="form-row"><label>동</label><input type="text" value={dong} onChange={e=>setDong(e.target.value)} placeholder="예: 101" /></div>
