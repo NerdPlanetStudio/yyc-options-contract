@@ -108,7 +108,9 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .total-cell{font-size:1.25rem}
 .summary-sign{text-align:center;padding:2rem 0;border-top:1px solid #e2e8f0}
 .summary-sign p{margin-bottom:1rem;color:#475569}
-.sign-row{display:flex;justify-content:center;gap:2rem;font-weight:600;font-size:1.0625rem;margin-bottom:.5rem}
+.sign-row{display:flex;justify-content:space-between;align-items:center;gap:2rem;width:100%;max-width:36rem;margin:0 auto .5rem;font-weight:600;font-size:1.0625rem}
+.sign-row > span:first-child{flex:1;min-width:0;text-align:left}
+.sign-row .sign-seal-wrap{flex-shrink:0}
 .sign-date{color:#64748b;font-size:.875rem}
 .sign-pad-wrap{margin:1.5rem auto;max-width:400px}
 .sign-pad-label{font-size:.875rem;color:#64748b;margin-bottom:.5rem;text-align:center}
@@ -301,9 +303,14 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .af-lb{display:inline-block;background:#888;color:#fff;padding:.3mm 1.5mm;border-radius:1mm;font-size:6.5pt;font-weight:700;margin-right:1mm}
 .af-ls{display:inline-block;background:#c0392b;color:#fff;padding:.3mm 1.5mm;border-radius:1mm;font-size:6.5pt;font-weight:700;margin-right:1mm}
 .af-pr{text-align:right;font-weight:700;font-size:8pt;background:#fafafa}
-.af-st{text-align:center;font-size:7.5pt;height:12mm;vertical-align:middle;position:relative}
-.af-seal{display:inline-block;position:relative;min-width:10mm}
-.af-seal-img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:12mm;max-width:24mm;opacity:.85;mix-blend-mode:multiply}
+.af-st{text-align:left;font-size:7.5pt;height:12mm;vertical-align:middle;position:relative}
+.af-contractor-seal-row{display:flex;align-items:center;justify-content:space-between;width:100%;box-sizing:border-box;gap:8mm;min-height:10mm}
+.af-contractor-seal-row .af-seal{flex-shrink:0;margin-left:0}
+.af-contractor-footer-line{display:flex;align-items:center;justify-content:space-between;width:100%;box-sizing:border-box;gap:10mm;flex-wrap:nowrap}
+.af-contractor-footer-text{flex:1;min-width:0;text-align:left}
+.af-contractor-footer-line .af-seal{flex-shrink:0;margin-left:0}
+.af-seal{display:inline-block;position:relative;min-width:18mm;text-align:center}
+.af-seal-img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:12mm;max-width:28mm;opacity:.85;mix-blend-mode:multiply}
 .af-notes{font-size:6pt;color:#666;margin-top:.5mm;line-height:1.3;padding:1mm 2mm;background:#fafafa}
 .af-hdr{background:linear-gradient(90deg,#1e3a5f,#2c5282);color:#fff;padding:3mm 4mm;display:flex;align-items:center;gap:3mm;border-radius:1mm;margin-bottom:2mm}
 .af-hdr-nm{font-size:22pt;font-weight:800;line-height:1}
