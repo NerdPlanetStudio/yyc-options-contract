@@ -1395,9 +1395,11 @@ export function App() {
             </div>
           </div>
           <h2 className="section-title">평형 선택</h2>
-          <p className="resident-gate-hint">
-            <strong>동·호·성함·휴대폰 뒷4자리</strong>가 모두 등록 정보와 일치해야 다음 단계로 진행 가능합니다
-          </p>
+          <div className="resident-gate-hint-wrap">
+            <p className="resident-gate-hint">
+              <strong>동·호·성함·휴대폰 뒷4자리</strong>가 모두 등록 정보와 일치해야 다음 단계로 진행 가능합니다
+            </p>
+          </div>
           <div className="type-grid">
             {TYPES.map(t => <button key={t.key} className={'type-btn'+(typeKey===t.key?' active':'')} onClick={()=>resetType(t.key)}>{t.name}</button>)}
           </div>
