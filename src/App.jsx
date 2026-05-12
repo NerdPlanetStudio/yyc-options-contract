@@ -916,7 +916,10 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
   const f=(n)=>String.fromCharCode(8361)+n.toLocaleString('ko-KR');
   const on=(id)=>sel[id]!==undefined;
   const Seal=({active})=>(
-    <span className="af-seal">(인){active&&signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
+    <span className="af-seal">
+      <span className="af-seal-chop">(인)</span>
+      {active && signData && <img className="af-seal-img" src={signData} alt="서명" />}
+    </span>
   );
   const TextOpt=({opt})=>{
     const s=on(opt.id);
@@ -1054,7 +1057,10 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
             <div style={ {marginBottom:'1mm'} }>상기 옵션을 신청합니다.</div>
             <div className="af-b af-contractor-footer-line" style={ {fontSize:'9pt'} }>
               <span className="af-contractor-footer-text"><span className="af-contractor-label">계약자:</span> {contractor}</span>
-              <span className="af-seal">(인){signData&&<img className="af-seal-img" src={signData} alt="서명"/>}</span>
+              <span className="af-seal">
+                <span className="af-seal-chop">(인)</span>
+                {signData && <img className="af-seal-img" src={signData} alt="서명" />}
+              </span>
             </div>
             <div style={ {color:'#64748b',fontSize:'8pt',marginTop:'1mm'} }>{dateStr}</div>
           </div>
@@ -1601,7 +1607,10 @@ export function App() {
           </div>
           <div className="sign-row">
             <span><span className="af-contractor-label">계약자:</span> {contractor}</span>
-            <span className="sign-seal-wrap">(인){signData && <img className="sign-inline-img" src={signData} alt="서명"/>}</span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
+            <span className="sign-seal-wrap">
+              <span className="sign-seal-chop">(인)</span>
+              {signData && <img className="sign-inline-img" src={signData} alt="서명" />}
+            </span>{signData && <button type="button" className="sign-redo-inline" onClick={clearSign} title="다시쓰기" aria-label="다시쓰기">↻</button>}
           </div>
           <div className="sign-date">{new Date().toLocaleDateString('ko-KR')}</div>
         </div>
