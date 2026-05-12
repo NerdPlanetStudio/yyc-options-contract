@@ -130,9 +130,9 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-width:5.75rem;
-  min-height:3rem;
-  padding:.125rem .5rem;
+  min-width:4.25rem;
+  min-height:2.5rem;
+  padding:.125rem .4rem;
   box-sizing:border-box;
   vertical-align:middle;
   flex-shrink:0
@@ -145,12 +145,12 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   top:50%;
   transform:translate(-50%,-50%);
   z-index:1;
-  height:2.65rem;
-  max-width:5rem;
+  height:1.75rem;
+  max-width:3.25rem;
   width:auto;
   object-fit:contain;
   pointer-events:none;
-  opacity:.88;
+  opacity:.92;
   mix-blend-mode:multiply
 }
 .sign-redo-inline{margin-left:.5rem;width:1.75rem;height:1.75rem;border:1px solid #cbd5e1;background:#fff;border-radius:50%;font-size:.9375rem;color:#64748b;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;line-height:1;padding:0;transition:all .15s}
@@ -340,8 +340,8 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   align-items:center;
   justify-content:center;
   position:relative;
-  min-width:20mm;
-  min-height:10mm;
+  min-width:14mm;
+  min-height:8mm;
   box-sizing:border-box;
   vertical-align:middle;
   text-align:center;
@@ -354,11 +354,11 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   top:50%;
   transform:translate(-50%,-50%);
   z-index:1;
-  height:12mm;
-  max-width:26mm;
+  height:8mm;
+  max-width:16mm;
   width:auto;
   object-fit:contain;
-  opacity:.88;
+  opacity:.92;
   mix-blend-mode:multiply
 }
 .af-notes{font-size:6pt;color:#666;margin-top:.5mm;line-height:1.3;padding:1mm 2mm;background:#fafafa}
