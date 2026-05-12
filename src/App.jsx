@@ -6,8 +6,6 @@ const residentJsonModules = import.meta.glob("./data/*.json", { eager: true });
 const realJson = Object.entries(residentJsonModules).find(([p]) => /\/allowedResidents\.json$/.test(p));
 const sampleJson = Object.entries(residentJsonModules).find(([p]) => /allowedResidents\.sample\.json$/.test(p));
 const allowedResidents = realJson?.[1]?.default ?? sampleJson?.[1]?.default ?? [];
-/** GitHub Pages·CI 빌드 등: 실제 `allowedResidents.json` 없이 샘플만 묶인 경우 */
-const IS_DEMO_RESIDENT_ONLY = !realJson && Boolean(sampleJson);
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://rjcrywtpsjehobckrqjj.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-HuVy_kanJ9qo-KrSGXXlA_bPn1nx5J";
@@ -26,6 +24,88 @@ function matchAllowedResident(dong, ho, contractorName, phoneLast4) {
       (r) => r.dong === d && r.ho === h && r.name === name && r.phoneTail === p
     ) ?? null
   );
+}
+
+/** Supabase 등록부 RPC — 공개 배포에서 실세대 검증 */
+async function verifyYycResidentRpc(dong, ho, contractorName, phoneLast4) {
+  const d = String(dong ?? "").replace(/\D/g, "");
+  const h = String(ho ?? "").replace(/\D/g, "");
+  const name = String(contractorName ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+  const p = String(phoneLast4 ?? "").replace(/\D/g, "");
+  if (!d || !h || !name || p.length !== 4) return null;
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_yyc_resident`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`
+    },
+    body: JSON.stringify({
+      p_dong: d,
+      p_ho: h,
+      p_contractor: name,
+      p_phone_tail: p
+    })
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(raw || `HTTP ${res.status}`);
+  }
+  if (!raw || raw === "null") return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const first = Array.isArray(parsed) ? parsed[0] : parsed;
+  if (first && typeof first.type_key === "string") return { typeKey: first.type_key };
+  return null;
+}
+
+/**
+ * 배포: Supabase RPC 성공 시 DB만 신뢰(빈 결과면 불일치).
+ * 로컬 dev: RPC 200·빈 배열일 때만 로컬 JSON 폴백.
+ * RPC 호출 실패 시: 로컬 매칭 있으면 폴백, 없으면 안내 오류 throw.
+ */
+async function verifyResidentForGate(dong, ho, contractorName, phoneLast4) {
+  let rpcRow = null;
+  let rpcFailed = false;
+  let rpcErrText = "";
+  try {
+    rpcRow = await verifyYycResidentRpc(dong, ho, contractorName, phoneLast4);
+  } catch (e) {
+    rpcFailed = true;
+    rpcErrText = e?.message || String(e);
+  }
+
+  const localRow = matchAllowedResident(dong, ho, contractorName, phoneLast4);
+
+  if (!rpcFailed) {
+    if (rpcRow) return rpcRow;
+    if (import.meta.env.DEV && localRow) return localRow;
+    return null;
+  }
+
+  if (localRow) return localRow;
+
+  let hint =
+    "\n\n[조치] Supabase → SQL Editor 에서 supabase/sql/yyc_resident_registry.sql 전체를 실행하고,\n" +
+    "로컬에 allowedResidents.json 이 있다면 터미널에서 npm run db:residents-sql 로 INSERT 문을 만든 뒤 같은 Editor 에서 실행해 주세요.";
+  try {
+    const j = JSON.parse(rpcErrText);
+    if (String(j?.code || "") === "PGRST202" || String(j?.message || "").includes("verify_yyc_resident")) {
+      hint =
+        "\n\n[원인] DB에 verify_yyc_resident 함수가 없습니다.\n[조치] supabase/sql/yyc_resident_registry.sql 전체를 SQL Editor 에서 실행한 뒤, 세대 데이터 INSERT 까지 완료해 주세요.";
+    }
+  } catch {
+    /* raw */
+  }
+  throw new Error((rpcErrText || "세대 검증 서버를 호출하지 못했습니다.") + hint);
 }
 
 /** 예: YYC-2026-00004 — DB 함수가 아직 옛 버전일 때 */
@@ -991,6 +1071,7 @@ export function App() {
   const [submitResult, setSubmitResult] = useState(null);
   const [contractPreviewOpen, setContractPreviewOpen] = useState(false);
   const [noticeModal, setNoticeModal] = useState(null);
+  const [gateVerifying, setGateVerifying] = useState(false);
   const canvasRef = useRef(null);
   const isDrawing = useRef(false);
   const hasDraw = useRef(false);
@@ -1167,7 +1248,7 @@ export function App() {
   const resetType = (key) => { setTypeKey(key); setSel({}); };
   const selectedList = allOpts.filter(o => sel[o.id] !== undefined);
 
-  const tryEnterOptionsFromGate = useCallback(() => {
+  const tryEnterOptionsFromGate = useCallback(async () => {
     if (!typeKey) {
       setNoticeModal({
         title: "평형 선택",
@@ -1175,23 +1256,38 @@ export function App() {
       });
       return;
     }
-    const row = matchAllowedResident(dong, ho, contractor, phoneLast4);
-    if (!row) {
-      setNoticeModal({
-        title: "등록 정보 불일치",
-        body: "입력하신 동·호·계약자명·휴대폰 뒷 4자리가 단지 등록 세대와 일치하지 않습니다.\n\n분양 계약서·등록부와 동일하게 입력했는지 다시 확인해 주세요."
-      });
-      return;
+    setGateVerifying(true);
+    try {
+      let row;
+      try {
+        row = await verifyResidentForGate(dong, ho, contractor, phoneLast4);
+      } catch (err) {
+        console.error(err);
+        setNoticeModal({
+          title: "세대 검증 오류",
+          body: err?.message || "세대 정보를 확인하는 중 오류가 발생했습니다."
+        });
+        return;
+      }
+      if (!row) {
+        setNoticeModal({
+          title: "등록 정보 불일치",
+          body: "입력하신 동·호·계약자명·휴대폰 뒷 4자리가 단지 등록 세대와 일치하지 않습니다.\n\n분양 계약서·등록부와 동일하게 입력했는지 다시 확인해 주세요."
+        });
+        return;
+      }
+      if (row.typeKey !== typeKey) {
+        const expect = TYPES.find((t) => t.key === row.typeKey)?.name || row.typeKey;
+        setNoticeModal({
+          title: "평형 확인",
+          body: `선택하신 평형이 등록된 세대 정보와 다릅니다.\n\n해당 세대의 평형은 「${expect}」입니다. 평형 버튼을 맞게 선택한 뒤 다시 시도해 주세요.`
+        });
+        return;
+      }
+      setStep(1);
+    } finally {
+      setGateVerifying(false);
     }
-    if (row.typeKey !== typeKey) {
-      const expect = TYPES.find((t) => t.key === row.typeKey)?.name || row.typeKey;
-      setNoticeModal({
-        title: "평형 확인",
-        body: `선택하신 평형이 등록된 세대 정보와 다릅니다.\n\n해당 세대의 평형은 「${expect}」입니다. 평형 버튼을 맞게 선택한 뒤 다시 시도해 주세요.`
-      });
-      return;
-    }
-    setStep(1);
   }, [dong, ho, contractor, phoneLast4, typeKey]);
 
   const noticePortal =
@@ -1234,12 +1330,6 @@ export function App() {
           <p className="hero-sub">멀티플러스 옵션 전자 신청 시스템</p>
         </header>
         <div className="form-card">
-          {IS_DEMO_RESIDENT_ONLY && (
-            <p className="gate-demo-hint" role="status">
-              이 공개 페이지는 개인정보 보호를 위해 <strong>데모 등록 세대 1건</strong>만 연결되어 있습니다. 다음만 통과합니다:{" "}
-              <strong>999동 · 9999호 · 데모세대 · 휴대폰 뒤 0000 · 평형 59㎡A</strong>. 실제 동·호로는 불일치 안내가 뜹니다.
-            </p>
-          )}
           <div className="contractor-form-center">
             <h2 className="section-title">계약자 정보</h2>
             <div className="form-row"><label>동</label><input type="text" value={dong} onChange={e=>setDong(e.target.value)} placeholder="예: 101" /></div>
@@ -1266,8 +1356,8 @@ export function App() {
             {TYPES.map(t => <button key={t.key} className={'type-btn'+(typeKey===t.key?' active':'')} onClick={()=>resetType(t.key)}>{t.name}</button>)}
           </div>
           <div className="entry-actions">
-            <button className="primary-btn" disabled={!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>옵션 계약 신청 &rarr;</button>
-            <button className="secondary-btn" disabled={!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>옵션 계약 변경 신청 &rarr;</button>
+            <button className="primary-btn" disabled={gateVerifying||!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>{gateVerifying ? "확인 중…" : "옵션 계약 신청 →"}</button>
+            <button className="secondary-btn" disabled={gateVerifying||!typeKey||!dong||!ho||!contractor||phoneLast4.length!==4} onClick={tryEnterOptionsFromGate}>{gateVerifying ? "확인 중…" : "옵션 계약 변경 신청 →"}</button>
           </div>
         </div>
       </div>
