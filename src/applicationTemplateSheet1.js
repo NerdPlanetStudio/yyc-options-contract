@@ -1,10 +1,19 @@
 /**
- * Desktop 복사본.xlsx 의 `Sheet1 (2)` 열 구성(27열)에 맞춰 옵션 금액을 넣기 위한 피벗
+ * 복사본.xlsx 피벗 시트 — `옵션 신청 현황`(신규) 또는 `Sheet1 (2)`(구) 열 구성(27열)
  */
 
 import { parseSelectedOptions } from "./applicationCsvShared.js";
 
-export const TEMPLATE_SHEET1_NAME = "Sheet1 (2)";
+/** 신규 템플릿 시트명 우선, 구 복사본 호환 */
+export const TEMPLATE_PIVOT_SHEET_NAMES = ["옵션 신청 현황", "Sheet1 (2)"];
+
+export function resolveTemplatePivotSheetName(wb) {
+  if (!wb?.SheetNames || !wb.Sheets) return null;
+  for (const name of TEMPLATE_PIVOT_SHEET_NAMES) {
+    if (wb.SheetNames.includes(name) && wb.Sheets[name]) return name;
+  }
+  return null;
+}
 
 /** 템플릿 1행 — 순서·문구가 다르면 병합하지 않음 */
 export const TEMPLATE_SHEET1_HEADERS = [

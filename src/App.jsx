@@ -9,7 +9,8 @@ import {
 } from "./applicationCsvShared.js";
 import { TYPES, getAppliances } from "./optionsCatalog.js";
 import {
-  TEMPLATE_SHEET1_NAME,
+  TEMPLATE_PIVOT_SHEET_NAMES,
+  resolveTemplatePivotSheetName,
   templateSheet1HeadersMatch,
   findTemplateSheet1AppendRowIndex,
   nextTemplateSheet1Sequence,
@@ -895,17 +896,20 @@ async function downloadApplicationsXlsx(rows) {
     if (!res.ok) throw new Error(`템플릿 HTTP ${res.status}`);
     const ab = await res.arrayBuffer();
     const wb = XLSX.read(ab, { type: "array" });
-    const ws = wb.Sheets[TEMPLATE_SHEET1_NAME];
-    if (!ws) {
-      alert(`템플릿에 시트 "${TEMPLATE_SHEET1_NAME}" 가 없습니다. public/templates/yyc-contract-pivot-template.xlsx 를 넣은 뒤 다시 배포해 주세요.`);
+    const sheetName = resolveTemplatePivotSheetName(wb);
+    if (!sheetName) {
+      alert(
+        `피벗 시트가 없습니다. 시트 이름이 "${TEMPLATE_PIVOT_SHEET_NAMES.join('" 또는 "')}" 인지 확인하고 public/templates/yyc-contract-pivot-template.xlsx 를 넣은 뒤 다시 배포해 주세요.`
+      );
       downloadFallbackWideSheetXlsx(rows);
       return;
     }
+    const ws = wb.Sheets[sheetName];
 
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
     if (!templateSheet1HeadersMatch(aoa[0])) {
       alert(
-        "템플릿의 Sheet1 (2) 1행 헤더가 예상과 다릅니다. 복사본.xlsx 를 public/templates/yyc-contract-pivot-template.xlsx 로 넣어 주세요."
+        `「옵션 신청 현황」(또는 구 시트명 Sheet1 (2)) 1행 헤더가 예상과 다릅니다. 복사본.xlsx 를 public/templates/yyc-contract-pivot-template.xlsx 로 넣어 주세요.`
       );
       downloadFallbackWideSheetXlsx(rows);
       return;

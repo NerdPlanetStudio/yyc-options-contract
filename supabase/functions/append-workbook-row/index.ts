@@ -1,5 +1,5 @@
 /**
- * applications INSERT 시(또는 동일 본문 POST) Storage 의 엑셀 워크북에 Sheet1 (2) 한 행 추가
+ * applications INSERT 시(또는 동일 본문 POST) Storage 의 엑셀 워크북에 피벗 시트(옵션 신청 현황 / Sheet1 (2)) 한 행 추가
  *
  * 검증: 헤더 x-workbook-secret === Deno.env.get("WORKBOOK_WEBHOOK_SECRET")
  * Storage: WORKBOOK_BUCKET / WORKBOOK_OBJECT_KEY (기본 application-workbook / yyc-contract-live.xlsx)
@@ -9,7 +9,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import * as XLSX from "npm:xlsx@0.18.5";
 
-const SHEET = "Sheet1 (2)";
+const SHEET_NAMES = ["옵션 신청 현황", "Sheet1 (2)"];
+
+function resolveSheetName(wb: XLSX.WorkBook): string | null {
+  if (!wb.SheetNames || !wb.Sheets) return null;
+  for (const n of SHEET_NAMES) {
+    if (wb.SheetNames.includes(n) && wb.Sheets[n]) return n;
+  }
+  return null;
+}
 const HEADERS = [
   "순번",
   "코드A",
@@ -231,14 +239,18 @@ Deno.serve(async (req) => {
     );
   }
 
-  const ws = wb.Sheets[SHEET];
-  if (!ws) {
-    return new Response(JSON.stringify({ error: `sheet missing: ${SHEET}` }), { status: 422, headers: { "Content-Type": "application/json" } });
+  const sheetName = resolveSheetName(wb);
+  if (!sheetName) {
+    return new Response(JSON.stringify({ error: "pivot sheet missing", tried: SHEET_NAMES }), {
+      status: 422,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
+  const ws = wb.Sheets[sheetName];
   const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as unknown[][];
   if (!headersMatch((aoa[0] as unknown[]) ?? [])) {
-    return new Response(JSON.stringify({ error: "header mismatch on Sheet1 (2)" }), {
+    return new Response(JSON.stringify({ error: "header mismatch on pivot sheet" }), {
       status: 422,
       headers: { "Content-Type": "application/json" }
     });

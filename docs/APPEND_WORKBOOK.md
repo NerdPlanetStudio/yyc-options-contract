@@ -40,7 +40,7 @@ Dashboard → **Database** → **Webhooks** → Create:
     - `Content-Type`: `application/json`  
     - `x-workbook-secret`: (위에서 설정한 `WORKBOOK_WEBHOOK_SECRET` 과 동일 값)
 
-Supabase 가 보내는 본문에 `record` 가 포함되며, 함수는 `Sheet1 (2)` 에 한 행을 추가한 뒤 같은 Storage 경로에 **upsert** 합니다.
+Supabase 가 보내는 본문에 `record` 가 포함되며, 함수는 **`옵션 신청 현황`** 시트(구 템플릿은 `Sheet1 (2)`)에 한 행을 추가한 뒤 같은 Storage 경로에 **upsert** 합니다.
 
 ## 4) 프론트 환경 변수 (선택)
 
@@ -55,6 +55,6 @@ Webhook 을 쓰면 `VITE_APPEND_*` 는 필요 없습니다.
 
 ## 5) 동작 요약
 
-- **Webhook (또는 선택적 클라이언트 호출)** → Edge Function 이 `yyc-contract-live.xlsx` 를 읽고 `Sheet1 (2)` 맨 아래에 **해당 신청 1행** 추가 후 다시 저장합니다.
+- **Webhook (또는 선택적 클라이언트 호출)** → Edge Function 이 `yyc-contract-live.xlsx` 를 읽고 **`옵션 신청 현황`** 시트 맨 아래에 **해당 신청 1행** 추가 후 다시 저장합니다. (구 템플릿 시트명 `Sheet1 (2)` 도 자동 인식합니다.)
 - 관리자가 **최신 누적본**만 받고 싶으면 `VITE_LIVE_WORKBOOK_URL` 에 공개 객체 URL을 넣습니다.
 - Webhook 없이 클라이언트만 켜면 비밀 키가 노출될 수 있으니, 운영은 Webhook 을 권장합니다.
