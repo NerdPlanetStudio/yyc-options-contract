@@ -22,8 +22,8 @@ DECLARE
 BEGIN
   SELECT COUNT(*)::bigint INTO n FROM public.applications;
   TRUNCATE TABLE public.applications;
-  -- 접수번호 일련: next_yyc_receipt_no 가 다시 001부터 나가도록 카운터 비움
-  DELETE FROM public.yyc_receipt_counter;
+  -- 접수번호 일련: next_yyc_receipt_no 가 다시 001부터 나가도록 카운터 전부 비움
+  TRUNCATE TABLE public.yyc_receipt_counter;
   RETURN COALESCE(n, 0);
 END;
 $$;
@@ -42,11 +42,11 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  DELETE FROM public.yyc_receipt_counter;
+  TRUNCATE TABLE public.yyc_receipt_counter;
 END;
 $$;
 
-COMMENT ON FUNCTION public.admin_reset_yyc_receipt_counter() IS '관리자: 접수번호 일련 카운터만 초기화';
+COMMENT ON FUNCTION public.admin_reset_yyc_receipt_counter() IS '관리자: 접수번호 일련 카운터만 초기화(TRUNCATE)';
 
 REVOKE ALL ON FUNCTION public.admin_reset_yyc_receipt_counter() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_reset_yyc_receipt_counter() TO authenticated;

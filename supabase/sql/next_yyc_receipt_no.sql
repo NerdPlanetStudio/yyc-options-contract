@@ -43,7 +43,8 @@ COMMENT ON FUNCTION public.next_yyc_receipt_no() IS 'YYC-YYYYMMDD001 형식, 연
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.next_yyc_receipt_no() TO anon, authenticated;
 
-ALTER TABLE public.yyc_receipt_counter ENABLE ROW LEVEL SECURITY;
+-- 직접 SELECT/DELETE 는 쓰지 않고 SECURITY DEFINER RPC 만 건드림. RLS 켜면 일부 환경에서 카운터 갱신이 꼬일 수 있어 끔.
+ALTER TABLE public.yyc_receipt_counter DISABLE ROW LEVEL SECURITY;
 
 -- 기존 접수와 번호를 이어가려면 (예: 2026년이 이미 47건이었다면):
 -- INSERT INTO public.yyc_receipt_counter (year, seq) VALUES (2026, 47)

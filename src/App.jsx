@@ -735,9 +735,11 @@ export function renderAdminDashboardIfNeeded() {
             resetBtn.textContent = "삭제 중...";
 
             try {
+              let usedMainClearRpc = false;
               if (ids.length > 0) {
                 try {
                   await adminClearAllApplicationsRpc();
+                  usedMainClearRpc = true;
                 } catch (rpcErr) {
                   if (!isAdminClearRpcMissing(rpcErr)) throw rpcErr;
                   await adminDeleteApplicationsByIds(ids);
@@ -755,9 +757,14 @@ export function renderAdminDashboardIfNeeded() {
                 await adminResetReceiptCounterRpc();
               } catch (rcErr) {
                 if (!isAdminClearRpcMissing(rcErr)) throw rcErr;
-                console.warn(
-                  "[YYC] admin_reset_yyc_receipt_counter 없음 — SQL 전체 반영 시 접수번호까지 초기화됩니다."
-                );
+                if (!usedMainClearRpc) {
+                  alert(
+                    "접수번호 카운터를 비울 수 없습니다.\n\n" +
+                      "Supabase → SQL Editor에서 아래 중 하나를 실행한 뒤 다시 「초기화」를 눌러 주세요.\n\n" +
+                      "1) supabase/sql/admin_clear_all_applications.sql 파일 통째로\n" +
+                      "2) 또는 한 줄: TRUNCATE TABLE public.yyc_receipt_counter;"
+                  );
+                }
               }
 
               resetBtn.textContent = "엑셀 초기화…";
