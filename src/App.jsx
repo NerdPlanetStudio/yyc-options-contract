@@ -26,6 +26,21 @@ const allowedResidents = realJson?.[1]?.default ?? sampleJson?.[1]?.default ?? [
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://rjcrywtpsjehobckrqjj.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_-HuVy_kanJ9qo-KrSGXXlA_bPn1nx5J";
 
+/** Edge `append-workbook-row` 기본값과 동일 — 관리자 엑셀은 Storage 누적본과 같은 객체를 받음 */
+function resolveLiveWorkbookPublicUrl() {
+  const fromEnv = (import.meta.env.VITE_LIVE_WORKBOOK_URL ?? "").trim();
+  if (fromEnv) return fromEnv;
+  const base = String(SUPABASE_URL).replace(/\/+$/, "");
+  const bucket = (import.meta.env.VITE_LIVE_WORKBOOK_BUCKET || "application-workbook").trim();
+  const key = (import.meta.env.VITE_LIVE_WORKBOOK_OBJECT_KEY || "yyc-contract-live_V1.xlsx").trim();
+  const pathAfterBucket = key
+    .split("/")
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  return `${base}/storage/v1/object/public/${encodeURIComponent(bucket)}/${pathAfterBucket}`;
+}
+
 /** Desktop 더미데이터.xlsx 기준 세대 — 동·호·계약자명·휴대폰 뒷 4자리 일치 행을 찾고, 선택 평형(typeKey)까지 같아야 통과 */
 function matchAllowedResident(dong, ho, contractorName, phoneLast4) {
   const d = String(dong ?? "").replace(/\D/g, "");
@@ -865,12 +880,13 @@ function downloadFallbackWideSheetXlsx(rows) {
   URL.revokeObjectURL(url);
 }
 
-/** `public/templates/...` 병합 또는 Storage 공개 워크북 그대로 내려받기 */
+/** Storage 누적본(기본) 또는 `VITE_ADMIN_XLS_TEMPLATE_ONLY=1` 일 때만 로컬 템플릿 병합 */
 async function downloadApplicationsXlsx(rows) {
-  const liveUrl = (import.meta.env.VITE_LIVE_WORKBOOK_URL || "").trim();
-  if (liveUrl) {
+  const templateOnly = import.meta.env.VITE_ADMIN_XLS_TEMPLATE_ONLY === "1";
+
+  if (!templateOnly) {
+    const liveUrl = resolveLiveWorkbookPublicUrl();
     try {
-      // Storage 공개 URL은 CDN이 path 단위로 오래 캐시하는 경우가 있어, 매 요청마다 쿼리로 캐시 미스 유도
       const bust = new URL(liveUrl);
       bust.searchParams.set("_cb", String(Date.now()));
       const res = await fetch(bust.href, { cache: "no-store" });
@@ -886,12 +902,14 @@ async function downloadApplicationsXlsx(rows) {
     } catch (e) {
       console.error(e);
       alert(
-        "Storage 누적 워크북(VITE_LIVE_WORKBOOK_URL)을 불러오지 못했습니다.\n\n" +
-          "호스팅 환경 변수에 올바른 공개 URL이 들어갔는지, 파일명(예: …_V1.xlsx)·버킷이 Storage와 같은지 확인한 뒤 사이트를 다시 빌드·배포해 주세요.\n\n" +
-          "(이전에는 실패 후 템플릿 병합 파일이 내려가 샘플 행이 섞여 보일 수 있었습니다.)"
+        "Storage 누적 워크북을 받지 못했습니다.\n\n" +
+          liveUrl +
+          "\n\n버킷이 Public 인지, 위 경로에 파일이 있는지 확인해 주세요. (Edge 의 WORKBOOK_BUCKET / OBJECT_KEY 와 같아야 합니다.)\n\n" +
+          "로컬 템플릿 병합만 쓰려면 빌드에 VITE_ADMIN_XLS_TEMPLATE_ONLY=1 을 넣을 수 있습니다."
       );
       return;
     }
+  }
 
   const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
   const templateUrl = new URL("templates/yyc-contract-pivot-template.xlsx", window.location.origin + base).href;

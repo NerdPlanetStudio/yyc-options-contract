@@ -81,13 +81,14 @@ Supabase Dashboard → **Database** → **Webhooks** → **Create a new hook**
 
 ---
 
-## 6) 관리자가 “누적본만” 받고 싶을 때 (선택)
+## 6) 관리자 “엑셀 내려받기” = Storage 누적본
 
-배포 환경 변수에 **공개** 워크북 직접 URL:
+앱은 **`VITE_SUPABASE_URL`(또는 코드 기본값)** 과 버킷·객체 이름으로 공개 Storage URL을 **자동 조합**해, 관리자가 받는 파일이 **Edge 가 한 줄씩 붙이는 객체**와 같게 됩니다.
 
-`VITE_LIVE_WORKBOOK_URL=https://<project-ref>.supabase.co/storage/v1/object/public/application-workbook/yyc-contract-live_V1.xlsx`
-
-→ 관리자 **엑셀 내려받기**는 이 파일을 그대로 저장합니다.
+- 기본: `https://<project-ref>.supabase.co/storage/v1/object/public/application-workbook/yyc-contract-live_V1.xlsx`
+- 버킷·파일명을 바꿨다면: `VITE_LIVE_WORKBOOK_BUCKET`, `VITE_LIVE_WORKBOOK_OBJECT_KEY` 로 덮어쓰기 (선택)
+- **다른 URL**(예: CDN)을 쓰려면: `VITE_LIVE_WORKBOOK_URL` 전체를 넣으면 그 주소가 우선합니다.
+- 로컬 템플릿만으로 받고 싶을 때만(디버그): `VITE_ADMIN_XLS_TEMPLATE_ONLY=1`
 
 ---
 

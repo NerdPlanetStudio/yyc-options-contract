@@ -27,14 +27,14 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Check VITE_LIVE_WORKBOOK_URL (admin Storage download)
+      - name: Optional workbook URL override
         env:
           W: ${{ secrets.VITE_LIVE_WORKBOOK_URL || vars.VITE_LIVE_WORKBOOK_URL }}
         run: |
-          if [ -z "$W" ]; then
-            echo "::warning::VITE_LIVE_WORKBOOK_URL is empty. Admin 엑셀은 public 템플릿+DB 병합(샘플 행 포함)으로만 받아집니다. Actions → Secrets 또는 Variables에 동일 이름으로 Storage 공개 URL을 넣어 주세요."
+          if [ -n "$W" ]; then
+            echo "VITE_LIVE_WORKBOOK_URL override is set for build."
           else
-            echo "VITE_LIVE_WORKBOOK_URL is set for build."
+            echo "VITE_LIVE_WORKBOOK_URL unset — admin xlsx uses SUPABASE_URL + default bucket/key (see App.jsx resolveLiveWorkbookPublicUrl)."
           fi
       - run: npm run build
         env:
