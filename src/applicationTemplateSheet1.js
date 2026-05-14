@@ -18,7 +18,7 @@ export function resolveTemplatePivotSheetName(wb) {
 /** 템플릿 1행 — 순서·문구가 다르면 병합하지 않음 */
 export const TEMPLATE_SHEET1_HEADERS = [
   "순번",
-  "코드A",
+  "접수번호",
   "용도",
   "타입",
   "동",

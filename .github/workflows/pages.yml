@@ -27,9 +27,21 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Check VITE_LIVE_WORKBOOK_URL (admin Storage download)
+        env:
+          W: ${{ secrets.VITE_LIVE_WORKBOOK_URL || vars.VITE_LIVE_WORKBOOK_URL }}
+        run: |
+          if [ -z "$W" ]; then
+            echo "::warning::VITE_LIVE_WORKBOOK_URL is empty. Admin 엑셀은 public 템플릿+DB 병합(샘플 행 포함)으로만 받아집니다. Actions → Secrets 또는 Variables에 동일 이름으로 Storage 공개 URL을 넣어 주세요."
+          else
+            echo "VITE_LIVE_WORKBOOK_URL is set for build."
+          fi
       - run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          # Secrets 또는 Variables 중 하나 (공개 URL이라 Variables 추천)
+          # Settings → Secrets and variables → Actions
+          VITE_LIVE_WORKBOOK_URL: ${{ secrets.VITE_LIVE_WORKBOOK_URL || vars.VITE_LIVE_WORKBOOK_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

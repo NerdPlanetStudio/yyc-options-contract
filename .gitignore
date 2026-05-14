@@ -28,3 +28,6 @@ dist-ssr
 
 # 실제 세대 DB(개인정보) — 공개 푸시 제외. 데모는 allowedResidents.sample.json
 src/data/allowedResidents.json
+
+# Supabase CLI 로컬 캐시
+supabase/.temp/

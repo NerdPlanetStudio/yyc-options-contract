@@ -26,7 +26,7 @@ SQL Editor 에서 `supabase/sql/storage_application_workbook_bucket.sql` 전체 
 
 Storage → `application-workbook` → **Upload**
 
-- 파일 이름: **`yyc-contract-live.xlsx`**
+- 파일 이름: **`yyc-contract-live_V1.xlsx`**
 - 내용: 지금 쓰는 **복사본 엑셀**(시트 `옵션 신청 현황`, 1행 헤더 동일) 그대로.
 
 (비어 있으면 Edge 가 `TEMPLATE_PUBLIC_URL` 로 받아 첫 파일을 만들 수도 있지만, **미리 올려 두는 편이 안전**합니다.)
@@ -42,7 +42,7 @@ Storage → `application-workbook` → **Upload**
 supabase secrets set WORKBOOK_WEBHOOK_SECRET="여기에_긴_비밀문자열"
 
 supabase secrets set WORKBOOK_BUCKET="application-workbook"
-supabase secrets set WORKBOOK_OBJECT_KEY="yyc-contract-live.xlsx"
+supabase secrets set WORKBOOK_OBJECT_KEY="yyc-contract-live_V1.xlsx"
 
 # Storage 에 파일이 없을 때 템플릿을 받아올 주소 (배포된 사이트)
 supabase secrets set TEMPLATE_PUBLIC_URL="https://당신-도메인/templates/yyc-contract-pivot-template.xlsx"
@@ -77,7 +77,7 @@ Supabase Dashboard → **Database** → **Webhooks** → **Create a new hook**
 | HTTP Headers | `Content-Type` = `application/json` |
 | HTTP Headers | `x-workbook-secret` = **3번에서 넣은 `WORKBOOK_WEBHOOK_SECRET` 과 완전히 동일** |
 
-저장 후 **테스트**: 신청 한 건 넣고 Storage 의 `yyc-contract-live.xlsx` 가 바뀌는지(행 수·수정 시각) 확인.
+저장 후 **테스트**: 신청 한 건 넣고 Storage 의 `yyc-contract-live_V1.xlsx` 가 바뀌는지(행 수·수정 시각) 확인.
 
 ---
 
@@ -85,7 +85,7 @@ Supabase Dashboard → **Database** → **Webhooks** → **Create a new hook**
 
 배포 환경 변수에 **공개** 워크북 직접 URL:
 
-`VITE_LIVE_WORKBOOK_URL=https://<project-ref>.supabase.co/storage/v1/object/public/application-workbook/yyc-contract-live.xlsx`
+`VITE_LIVE_WORKBOOK_URL=https://<project-ref>.supabase.co/storage/v1/object/public/application-workbook/yyc-contract-live_V1.xlsx`
 
 → 관리자 **엑셀 내려받기**는 이 파일을 그대로 저장합니다.
 
@@ -112,4 +112,4 @@ Supabase Dashboard → **Database** → **Webhooks** → **Create a new hook**
 
 ## 동작 요약
 
-`applications` **INSERT** → Webhook → Edge 가 Storage 에서 `yyc-contract-live.xlsx` 다운로드 → **`옵션 신청 현황`** 시트(구 `Sheet1 (2)` 도 인식) 맨 아래에 **1행 추가** → 다시 **upsert** 저장.
+`applications` **INSERT** → Webhook → Edge 가 Storage 에서 `yyc-contract-live_V1.xlsx` 다운로드 → **`옵션 신청 현황`** 시트(구 `Sheet1 (2)` 도 인식) 맨 아래에 **1행 추가** → 다시 **upsert** 저장.

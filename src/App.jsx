@@ -870,7 +870,10 @@ async function downloadApplicationsXlsx(rows) {
   const liveUrl = (import.meta.env.VITE_LIVE_WORKBOOK_URL || "").trim();
   if (liveUrl) {
     try {
-      const res = await fetch(liveUrl, { cache: "no-store" });
+      // Storage 공개 URL은 CDN이 path 단위로 오래 캐시하는 경우가 있어, 매 요청마다 쿼리로 캐시 미스 유도
+      const bust = new URL(liveUrl);
+      bust.searchParams.set("_cb", String(Date.now()));
+      const res = await fetch(bust.href, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -883,10 +886,12 @@ async function downloadApplicationsXlsx(rows) {
     } catch (e) {
       console.error(e);
       alert(
-        "Storage 에 쌓인 워크북(VITE_LIVE_WORKBOOK_URL)을 불러오지 못했습니다. 아래는 로컬 템플릿 병합으로 받습니다."
+        "Storage 누적 워크북(VITE_LIVE_WORKBOOK_URL)을 불러오지 못했습니다.\n\n" +
+          "호스팅 환경 변수에 올바른 공개 URL이 들어갔는지, 파일명(예: …_V1.xlsx)·버킷이 Storage와 같은지 확인한 뒤 사이트를 다시 빌드·배포해 주세요.\n\n" +
+          "(이전에는 실패 후 템플릿 병합 파일이 내려가 샘플 행이 섞여 보일 수 있었습니다.)"
       );
+      return;
     }
-  }
 
   const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
   const templateUrl = new URL("templates/yyc-contract-pivot-template.xlsx", window.location.origin + base).href;

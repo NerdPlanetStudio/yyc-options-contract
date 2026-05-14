@@ -2,7 +2,7 @@
  * applications INSERT 시(또는 동일 본문 POST) Storage 의 엑셀 워크북에 피벗 시트(옵션 신청 현황 / Sheet1 (2)) 한 행 추가
  *
  * 검증: 헤더 x-workbook-secret === Deno.env.get("WORKBOOK_WEBHOOK_SECRET")
- * Storage: WORKBOOK_BUCKET / WORKBOOK_OBJECT_KEY (기본 application-workbook / yyc-contract-live.xlsx)
+ * Storage: WORKBOOK_BUCKET / WORKBOOK_OBJECT_KEY (기본 application-workbook / yyc-contract-live_V1.xlsx)
  * 파일 없음: TEMPLATE_PUBLIC_URL GET 으로 초기 템플릿 사용
  */
 
@@ -20,7 +20,7 @@ function resolveSheetName(wb: XLSX.WorkBook): string | null {
 }
 const HEADERS = [
   "순번",
-  "코드A",
+  "접수번호",
   "용도",
   "타입",
   "동",
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const bucket = Deno.env.get("WORKBOOK_BUCKET") ?? "application-workbook";
-  const objectKey = Deno.env.get("WORKBOOK_OBJECT_KEY") ?? "yyc-contract-live.xlsx";
+  const objectKey = Deno.env.get("WORKBOOK_OBJECT_KEY") ?? "yyc-contract-live_V1.xlsx";
   const templateUrl = Deno.env.get("TEMPLATE_PUBLIC_URL") ?? "";
 
   const supabase = createClient(supabaseUrl, serviceKey);
@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: "workbook missing and TEMPLATE_PUBLIC_URL unset",
-        hint: "Upload yyc-contract-live.xlsx to storage or set TEMPLATE_PUBLIC_URL to your template xlsx URL"
+        hint: "Upload yyc-contract-live_V1.xlsx to storage or set TEMPLATE_PUBLIC_URL to your template xlsx URL"
       }),
       { status: 422, headers: { "Content-Type": "application/json" } }
     );
