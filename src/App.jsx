@@ -477,6 +477,30 @@ async function adminResetApplicationWorkbook(accessToken) {
   }
 }
 
+/** 접수번호 일련 카운터만 비움 — admin_reset_yyc_receipt_counter (admin_clear_all_applications.sql) */
+async function adminResetReceiptCounterRpc() {
+  const session = getAdminSession();
+  if (!session?.access_token) throw new Error("로그인이 필요합니다.");
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_reset_yyc_receipt_counter`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: "{}"
+  });
+
+  const raw = await res.text();
+  if (!res.ok) {
+    if (res.status === 401) clearAdminSession();
+    const err = new Error(parseSupabaseErrorMessage(raw) || "admin_reset_yyc_receipt_counter RPC 실패");
+    err.status = res.status;
+    throw err;
+  }
+}
+
 /** 관리자 초기화(권장) — DB의 applications 전부 삭제. Supabase 에 admin_clear_all_applications.sql 실행 필요 */
 async function adminClearAllApplicationsRpc() {
   const session = getAdminSession();
@@ -699,8 +723,8 @@ export function renderAdminDashboardIfNeeded() {
 
             const confirmMsg =
               ids.length > 0
-                ? "Supabase에 저장된 모든 접수(고객) 데이터를 삭제하고, Storage 누적 엑셀도 템플릿으로 초기화합니다. 복구할 수 없습니다. 계속할까요?"
-                : "접수 기록은 없습니다. Storage 누적 엑셀만 템플릿으로 초기화합니다. 계속할까요?";
+                ? "모든 접수(DB)를 삭제하고, 접수번호 일련을 초기화하며, Storage 누적 엑셀을 템플릿으로 되돌립니다. 복구할 수 없습니다. 계속할까요?"
+                : "접수 기록은 없습니다. 접수번호 일련을 초기화하고 Storage 누적 엑셀만 템플릿으로 되돌립니다. 계속할까요?";
 
             if (!confirm(confirmMsg)) {
               return;
@@ -724,6 +748,16 @@ export function renderAdminDashboardIfNeeded() {
                     `삭제 후에도 서버에 접수가 ${remaining.length}건 남아 있습니다.\n\nSupabase SQL Editor에서 supabase/sql/admin_clear_all_applications.sql 전체를 실행한 뒤 다시 초기화해 주세요.`
                   );
                 }
+              }
+
+              resetBtn.textContent = "접수번호 초기화…";
+              try {
+                await adminResetReceiptCounterRpc();
+              } catch (rcErr) {
+                if (!isAdminClearRpcMissing(rcErr)) throw rcErr;
+                console.warn(
+                  "[YYC] admin_reset_yyc_receipt_counter 없음 — SQL 전체 반영 시 접수번호까지 초기화됩니다."
+                );
               }
 
               resetBtn.textContent = "엑셀 초기화…";
