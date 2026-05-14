@@ -245,6 +245,19 @@ async function saveApplicationToSupabase(payload) {
 async function submitApplicationToAdmin(payload) {
   await saveApplicationToSupabase(payload);
   window.__yycApplicationSubmitted = true;
+
+  /** Storage 워크북 자동 갱신 — Edge Function 배포 후 선택 (비밀은 번들에 노출되므로 내부용·저트래픽만) */
+  if (import.meta.env.VITE_APPEND_WORKBOOK_ON_SUBMIT === "1") {
+    const url = (import.meta.env.VITE_WORKBOOK_APPEND_URL || "").trim();
+    const secret = (import.meta.env.VITE_WORKBOOK_APPEND_SECRET || "").trim();
+    if (url && secret) {
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-workbook-secret": secret },
+        body: JSON.stringify({ record: payload })
+      }).catch((e) => console.warn("[workbook append]", e));
+    }
+  }
 }
 
 const ADMIN_SESSION_KEY = "yyc_admin_session";
@@ -851,8 +864,29 @@ function downloadFallbackWideSheetXlsx(rows) {
   URL.revokeObjectURL(url);
 }
 
-/** `public/templates/yyc-contract-pivot-template.xlsx` — Desktop 복사본과 동일, `Sheet1 (2)`에 접수 행 추가 */
+/** `public/templates/...` 병합 또는 Storage 공개 워크북 그대로 내려받기 */
 async function downloadApplicationsXlsx(rows) {
+  const liveUrl = (import.meta.env.VITE_LIVE_WORKBOOK_URL || "").trim();
+  if (liveUrl) {
+    try {
+      const res = await fetch(liveUrl, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${adminXlsxFilenameDateStamp()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      console.error(e);
+      alert(
+        "Storage 에 쌓인 워크북(VITE_LIVE_WORKBOOK_URL)을 불러오지 못했습니다. 아래는 로컬 템플릿 병합으로 받습니다."
+      );
+    }
+  }
+
   const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
   const templateUrl = new URL("templates/yyc-contract-pivot-template.xlsx", window.location.origin + base).href;
 

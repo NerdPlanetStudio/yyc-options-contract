@@ -1,0 +1,5 @@
+# Supabase CLI 로컬/배포 시 사용. Edge Function 만 쓸 때도 경로 인식에 도움이 됩니다.
+
+[functions.append-workbook-row]
+# Database Webhook 은 사용자 JWT 가 아니므로, 본문 + x-workbook-secret 으로 검증합니다.
+verify_jwt = false
