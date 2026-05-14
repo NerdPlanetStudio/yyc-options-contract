@@ -27,21 +27,11 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Optional workbook URL override
-        env:
-          W: ${{ secrets.VITE_LIVE_WORKBOOK_URL || vars.VITE_LIVE_WORKBOOK_URL }}
-        run: |
-          if [ -n "$W" ]; then
-            echo "VITE_LIVE_WORKBOOK_URL override is set for build."
-          else
-            echo "VITE_LIVE_WORKBOOK_URL unset — admin xlsx uses SUPABASE_URL + default bucket/key (see App.jsx resolveLiveWorkbookPublicUrl)."
-          fi
+      # 관리자 엑셀: VITE_LIVE_WORKBOOK_URL 을 넣지 않음 → 빌드에 박이지 않고,
+      # 런타임에 SUPABASE_URL + application-workbook + yyc-contract-live_V1.xlsx 로 Storage URL 조합 (App.jsx)
       - run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          # Secrets 또는 Variables 중 하나 (공개 URL이라 Variables 추천)
-          # Settings → Secrets and variables → Actions
-          VITE_LIVE_WORKBOOK_URL: ${{ secrets.VITE_LIVE_WORKBOOK_URL || vars.VITE_LIVE_WORKBOOK_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
