@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { createClient } from "@supabase/supabase-js";
 import * as XLSX from "xlsx";
 import {
   parseSelectedOptions,
@@ -452,20 +453,26 @@ function isAdminClearRpcMissing(err) {
 
 /** Storage 누적 엑셀을 템플릿으로 덮어씀 — Edge reset-application-workbook (관리자 JWT) */
 async function adminResetApplicationWorkbook(accessToken) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-application-workbook`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${accessToken}`
+  const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` }
     },
-    body: "{}"
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
   });
-  const raw = await res.text();
-  if (!res.ok) {
-    if (res.status === 401) clearAdminSession();
-    const err = new Error(parseSupabaseErrorMessage(raw) || `HTTP ${res.status}`);
-    err.status = res.status;
+
+  const { error } = await client.functions.invoke("reset-application-workbook", {
+    body: {}
+  });
+
+  if (error) {
+    if (String(error.message || "").includes("JWT") || String(error.message || "").includes("session"))
+      clearAdminSession();
+    const err = new Error(error.message || "Edge 함수 호출 실패");
+    err.status = error.status;
     throw err;
   }
 }
