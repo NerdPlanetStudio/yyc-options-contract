@@ -930,9 +930,16 @@ async function downloadApplicationsXlsx(rows) {
 
   if (!templateOnly) {
     const liveUrl = resolveLiveWorkbookPublicUrl();
+    const usingEnvOverride = !!(import.meta.env.VITE_LIVE_WORKBOOK_URL ?? "").trim();
     try {
       const bust = new URL(liveUrl);
       bust.searchParams.set("_cb", String(Date.now()));
+      console.info(
+        usingEnvOverride
+          ? "[YYC 관리자] 엑셀: VITE_LIVE_WORKBOOK_URL 지정 주소"
+          : "[YYC 관리자] 엑셀: Storage 자동 주소(SUPABASE_URL+버킷+파일명)",
+        bust.href
+      );
       const res = await fetch(bust.href, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
