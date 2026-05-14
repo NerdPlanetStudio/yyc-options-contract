@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: "workbook missing and TEMPLATE_PUBLIC_URL unset",
-        hint: "Upload yyc-contract-live.xlsx to storage or set TEMPLATE_PUBLIC_URL to your deployed /templates/yyc-contract-pivot-template.xlsx"
+        hint: "Upload yyc-contract-live.xlsx to storage or set TEMPLATE_PUBLIC_URL to your template xlsx URL"
       }),
       { status: 422, headers: { "Content-Type": "application/json" } }
     );

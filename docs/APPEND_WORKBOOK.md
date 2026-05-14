@@ -9,7 +9,7 @@
    - 이름 예: `application-workbook`  
    - **Public** 으로 두면 URL만으로 내려받기 가능(개인정보 노출 주의). 비공개면 관리자 다운로드는 아래 `VITE_LIVE_WORKBOOK_URL` 대신 서명 URL 방식을 따로 써야 합니다.
 2. 객체 경로 예: `yyc-contract-live.xlsx`  
-   - 처음에는 로컬 `public/templates/yyc-contract-pivot-template.xlsx` 와 동일한 파일을 업로드해 두면 됩니다.
+   - 처음에는 새로 받을 **복사본.xlsx** 를 그대로 올려 두면 됩니다(또는 배포 사이트에 `public/templates/yyc-contract-pivot-template.xlsx` 를 두고 `TEMPLATE_PUBLIC_URL` 로 가져오게 할 수 있습니다).
 
 ## 2) Edge Function 배포
 

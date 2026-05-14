@@ -897,7 +897,7 @@ async function downloadApplicationsXlsx(rows) {
     const wb = XLSX.read(ab, { type: "array" });
     const ws = wb.Sheets[TEMPLATE_SHEET1_NAME];
     if (!ws) {
-      alert(`템플릿에 시트 "${TEMPLATE_SHEET1_NAME}" 가 없습니다. public/templates/yyc-contract-pivot-template.xlsx 를 확인해 주세요.`);
+      alert(`템플릿에 시트 "${TEMPLATE_SHEET1_NAME}" 가 없습니다. public/templates/yyc-contract-pivot-template.xlsx 를 넣은 뒤 다시 배포해 주세요.`);
       downloadFallbackWideSheetXlsx(rows);
       return;
     }
@@ -905,7 +905,7 @@ async function downloadApplicationsXlsx(rows) {
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
     if (!templateSheet1HeadersMatch(aoa[0])) {
       alert(
-        "템플릿의 Sheet1 (2) 1행 헤더가 예상과 다릅니다. 복사본.xlsx 최신본으로 public/templates/yyc-contract-pivot-template.xlsx 를 다시 넣어 주세요."
+        "템플릿의 Sheet1 (2) 1행 헤더가 예상과 다릅니다. 복사본.xlsx 를 public/templates/yyc-contract-pivot-template.xlsx 로 넣어 주세요."
       );
       downloadFallbackWideSheetXlsx(rows);
       return;
@@ -934,7 +934,7 @@ async function downloadApplicationsXlsx(rows) {
   } catch (e) {
     console.error(e);
     alert(
-      "복사본 템플릿을 불러오지 못했습니다. public/templates/yyc-contract-pivot-template.xlsx 가 있는지 확인합니다. 임시로 넓은 열 형식으로 받습니다."
+      "복사본 템플릿(public/templates/yyc-contract-pivot-template.xlsx)을 불러오지 못했습니다. 파일을 넣은 뒤 배포하면 됩니다. 지금은 넓은 열 형식으로 받습니다."
     );
     downloadFallbackWideSheetXlsx(rows);
   }
