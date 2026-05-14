@@ -54,11 +54,19 @@ supabase secrets set TEMPLATE_PUBLIC_URL="https://당신-도메인/templates/yyc
 
 ```bash
 supabase functions deploy append-workbook-row --no-verify-jwt
+supabase functions deploy reset-application-workbook --no-verify-jwt
 ```
 
-배포 후 주소는 고정입니다:
+- `append-workbook-row`: `https://<project-ref>.supabase.co/functions/v1/append-workbook-row`
+- `reset-application-workbook`: `https://<project-ref>.supabase.co/functions/v1/reset-application-workbook` (관리자 **초기화** 시 `TEMPLATE_PUBLIC_URL` 템플릿으로 누적 xlsx 덮어쓰기)
 
-`https://<project-ref>.supabase.co/functions/v1/append-workbook-row`
+### (선택) 엑셀 초기화 허용 이메일 제한
+
+기본은 **로그인만 되면** 엑셀 초기화 가능합니다. 특정 관리자만 허용하려면:
+
+```bash
+supabase secrets set WORKBOOK_RESET_ALLOWED_EMAILS="admin1@example.com,admin2@example.com"
+```
 
 ---
 
@@ -114,3 +122,5 @@ Supabase Dashboard → **Database** → **Webhooks** → **Create a new hook**
 ## 동작 요약
 
 `applications` **INSERT** → Webhook → Edge 가 Storage 에서 `yyc-contract-live_V1.xlsx` 다운로드 → **`옵션 신청 현황`** 시트(구 `Sheet1 (2)` 도 인식) 맨 아래에 **1행 추가** → 다시 **upsert** 저장.
+
+관리자 **초기화** → DB `applications` 비움 → Edge `reset-application-workbook` 이 `TEMPLATE_PUBLIC_URL` 템플릿으로 같은 Storage 객체를 **통째로 덮어씀**.

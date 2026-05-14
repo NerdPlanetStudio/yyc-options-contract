@@ -450,6 +450,26 @@ function isAdminClearRpcMissing(err) {
   return false;
 }
 
+/** Storage 누적 엑셀을 템플릿으로 덮어씀 — Edge reset-application-workbook (관리자 JWT) */
+async function adminResetApplicationWorkbook(accessToken) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-application-workbook`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${accessToken}`
+    },
+    body: "{}"
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    if (res.status === 401) clearAdminSession();
+    const err = new Error(parseSupabaseErrorMessage(raw) || `HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+}
+
 /** 관리자 초기화(권장) — DB의 applications 전부 삭제. Supabase 에 admin_clear_all_applications.sql 실행 필요 */
 async function adminClearAllApplicationsRpc() {
   const session = getAdminSession();
@@ -615,7 +635,7 @@ export function renderAdminDashboardIfNeeded() {
         const kwAttr = escapeHtmlAttr(keyword);
         const dongAttr = escapeHtmlAttr(dong);
 
-        listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn secondary" id="admin-xlsx-download">엑셀(.xlsx) 내려받기</button><button type="button" class="admin-btn danger" id="admin-filter-reset" title="저장된 모든 접수를 삭제합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
+        listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn secondary" id="admin-xlsx-download">엑셀(.xlsx) 내려받기</button><button type="button" class="admin-btn danger" id="admin-filter-reset" title="접수 DB와 Storage 누적 엑셀을 초기화합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
                     <tr data-id="${r.id}" class="${selected?.id === r.id ? "active" : ""}">
                       <td style="font-size:12px;white-space:nowrap">${r.receipt_no || "-"}</td>
                       <td>${formatAdminDate(r.created_at)}</td>
@@ -657,6 +677,12 @@ export function renderAdminDashboardIfNeeded() {
             ev.preventDefault();
             ev.stopPropagation();
 
+            const session = getAdminSession();
+            if (!session?.access_token) {
+              alert("로그인이 필요합니다.");
+              return;
+            }
+
             let ids = [];
             try {
               ids = await adminFetchAllApplicationIds();
@@ -664,14 +690,13 @@ export function renderAdminDashboardIfNeeded() {
               ids = rows.map((r) => r.id).filter(Boolean);
             }
 
-            if (ids.length > 0) {
-              if (
-                !confirm(
-                  "Supabase에 저장된 모든 접수(고객) 데이터를 삭제합니다. 복구할 수 없습니다. 계속할까요?"
-                )
-              ) {
-                return;
-              }
+            const confirmMsg =
+              ids.length > 0
+                ? "Supabase에 저장된 모든 접수(고객) 데이터를 삭제하고, Storage 누적 엑셀도 템플릿으로 초기화합니다. 복구할 수 없습니다. 계속할까요?"
+                : "접수 기록은 없습니다. Storage 누적 엑셀만 템플릿으로 초기화합니다. 계속할까요?";
+
+            if (!confirm(confirmMsg)) {
+              return;
             }
 
             resetBtn.disabled = true;
@@ -692,6 +717,18 @@ export function renderAdminDashboardIfNeeded() {
                     `삭제 후에도 서버에 접수가 ${remaining.length}건 남아 있습니다.\n\nSupabase SQL Editor에서 supabase/sql/admin_clear_all_applications.sql 전체를 실행한 뒤 다시 초기화해 주세요.`
                   );
                 }
+              }
+
+              resetBtn.textContent = "엑셀 초기화…";
+              try {
+                await adminResetApplicationWorkbook(session.access_token);
+              } catch (wbErr) {
+                const wmsg = parseSupabaseErrorMessage(wbErr.message) || wbErr.message || String(wbErr);
+                alert(
+                  ids.length > 0
+                    ? `DB 접수는 비웠지만 Storage 엑셀 초기화에 실패했습니다.\n\n${wmsg}\n\nEdge 함수 reset-application-workbook 배포 및 TEMPLATE_PUBLIC_URL secrets 를 확인해 주세요.`
+                    : `Storage 엑셀 초기화에 실패했습니다.\n\n${wmsg}`
+                );
               }
 
               const s = document.getElementById("admin-search");
