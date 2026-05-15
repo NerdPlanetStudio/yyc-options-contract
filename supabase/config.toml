@@ -7,3 +7,7 @@ verify_jwt = false
 [functions.reset-application-workbook]
 # JWT 는 함수 안에서 auth.getUser 으로 검증합니다.
 verify_jwt = false
+
+[functions.sign-application-workbook]
+# JWT 는 함수 안에서 auth.getUser 으로 검증합니다.
+verify_jwt = false

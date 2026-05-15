@@ -965,23 +965,41 @@ function downloadFallbackWideSheetXlsx(rows) {
   URL.revokeObjectURL(url);
 }
 
+/** Edge sign-application-workbook → 60초짜리 서명 URL */
+async function fetchWorkbookSignedUrl(accessToken) {
+  const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
+
+  const { data, error } = await client.functions.invoke("sign-application-workbook", {
+    body: { expiresIn: 60 }
+  });
+
+  if (error) {
+    if (String(error.message || "").toLowerCase().includes("session")) clearAdminSession();
+    const err = new Error(error.message || "서명 URL 발급 실패");
+    err.status = error.status;
+    throw err;
+  }
+  const u = data && typeof data === "object" ? (data).signedUrl : null;
+  if (!u || typeof u !== "string") throw new Error("signedUrl 응답이 비어 있습니다.");
+  return u;
+}
+
 /** Storage 누적본(기본) 또는 `VITE_ADMIN_XLS_TEMPLATE_ONLY=1` 일 때만 로컬 템플릿 병합 */
 async function downloadApplicationsXlsx(rows) {
   const templateOnly = import.meta.env.VITE_ADMIN_XLS_TEMPLATE_ONLY === "1";
 
   if (!templateOnly) {
-    const liveUrl = resolveLiveWorkbookPublicUrl();
-    const usingEnvOverride = !!(import.meta.env.VITE_LIVE_WORKBOOK_URL ?? "").trim();
+    const session = getAdminSession();
+    if (!session?.access_token) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
     try {
-      const bust = new URL(liveUrl);
-      bust.searchParams.set("_cb", String(Date.now()));
-      console.info(
-        usingEnvOverride
-          ? "[YYC 관리자] 엑셀: VITE_LIVE_WORKBOOK_URL 지정 주소"
-          : "[YYC 관리자] 엑셀: Storage 자동 주소(SUPABASE_URL+버킷+파일명)",
-        bust.href
-      );
-      const res = await fetch(bust.href, { cache: "no-store" });
+      const signedUrl = await fetchWorkbookSignedUrl(session.access_token);
+      const res = await fetch(signedUrl, { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -995,8 +1013,8 @@ async function downloadApplicationsXlsx(rows) {
       console.error(e);
       alert(
         "Storage 누적 워크북을 받지 못했습니다.\n\n" +
-          liveUrl +
-          "\n\n버킷이 Public 인지, 위 경로에 파일이 있는지 확인해 주세요. (Edge 의 WORKBOOK_BUCKET / OBJECT_KEY 와 같아야 합니다.)\n\n" +
+          (e?.message || String(e)) +
+          "\n\nEdge 함수 sign-application-workbook 이 배포돼 있고, WORKBOOK_BUCKET / WORKBOOK_OBJECT_KEY 가 맞는지 확인해 주세요.\n\n" +
           "로컬 템플릿 병합만 쓰려면 빌드에 VITE_ADMIN_XLS_TEMPLATE_ONLY=1 을 넣을 수 있습니다."
       );
       return;
