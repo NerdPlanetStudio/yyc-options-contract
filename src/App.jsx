@@ -1094,41 +1094,6 @@ async function downloadApplicationsXlsx(rows) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
-/** 옵션 카드 — 미선택/선택 2열 이미지를 동일 크기 박스에 맞춤 */
-function CmpCompareImages({ baseSrc, selSrc, basePh = "📷", selPh = "📷" }) {
-  return (
-    <div className="cmp-imgs">
-      <div className="cmp-img">
-        <div className="cmp-img-frame">
-          {baseSrc ? <img src={baseSrc} alt="미선택형" /> : <div className="img-ph">{basePh}</div>}
-        </div>
-      </div>
-      <div className="cmp-img">
-        <div className="cmp-img-frame">
-          {selSrc ? <img src={selSrc} alt="선택형" /> : <div className="img-ph">{selPh}</div>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AfCompareImgRow({ baseSrc, selSrc }) {
-  return (
-    <tr>
-      <td className="af-tc">
-        <div className="af-img-frame">
-          {baseSrc ? <img src={baseSrc} className="af-fw" alt="미선택형" /> : "—"}
-        </div>
-      </td>
-      <td className="af-tc">
-        <div className="af-img-frame">
-          {selSrc ? <img src={selSrc} className="af-fw" alt="선택형" /> : "—"}
-        </div>
-      </td>
-    </tr>
-  );
-}
-
 /** PDF 신청서 2면 인쇄 양식 — typeData(평형 카탈로그) 기준으로 55A·59A 등 공통 */
 function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho }) {
   if(!typeData) return null;
@@ -1210,11 +1175,40 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
         <div className="afc">
           <div className="afs-t">가전 옵션 선택 품목</div>
           <table className="af-at"><thead><tr><th style={ {width:'28%'} }>품목</th><th>미선택형 / 선택형</th><th style={ {width:'18%'} }>계약자 확인</th></tr></thead><tbody>
-            <tr><td rowSpan={2}><div style={ {fontWeight:600} }>냉장고패키지</div><div className="af-sg2">냉장고: 삼성 RR40C7995AP<br/>냉동고: 삼성 RZ34C7965AP<br/>김치냉장고: 삼성 RQ34C7945AP</div></td>
-              <td><span className="af-lb">미선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/N4lwIZD.png"/><div className="af-pr">—</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on('a_fr')}/></span></td></tr>
-            <tr><td><span className="af-ls">선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/wFVmKCn.png"/><div className="af-pr">공급금액: {f(7300000)}</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on('a_fr')}/></span></td></tr>
+            {fridge && (
+              <React.Fragment>
+                <tr>
+                  <td rowSpan={2}>
+                    <div style={{ fontWeight: 600 }}>{fridge.name}</div>
+                    <div className="af-sg2">{fridge.model}</div>
+                  </td>
+                  <td>
+                    <span className="af-lb">미선택형</span>
+                    <br />
+                    {fridge.baseImg ? <img className="af-at-img" src={fridge.baseImg} alt="" /> : null}
+                    <div className="af-pr">—</div>
+                  </td>
+                  <td className="af-st">
+                    <span className="af-contractor-seal-row">
+                      <span className="af-contractor-label">계약자:</span> <Seal active={!on(fridge.id)} />
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span className="af-ls">선택형</span>
+                    <br />
+                    {fridge.img ? <img className="af-at-img" src={fridge.img} alt="" /> : null}
+                    <div className="af-pr">공급금액: {f(fridge.price)}</div>
+                  </td>
+                  <td className="af-st">
+                    <span className="af-contractor-seal-row">
+                      <span className="af-contractor-label">계약자:</span> <Seal active={on(fridge.id)} />
+                    </span>
+                  </td>
+                </tr>
+              </React.Fragment>
+            )}
             {bathApps.map(it=><AppRow key={it.id} it={it}/>)}
           </tbody></table>
           <div className="af-notes">※ 가전옵션 제품은 설치시점에 단종 등 사유로 동등 이상 제품 변경 가능<br/>※ 냉장고패키지 선택시 냉장/냉동/김치 순 배열 고정, 도어방향은 설치 위치에 따라 다를 수 있음</div>
@@ -1240,26 +1234,38 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
               <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
               <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
             </tr></thead><tbody>
-                            {closets.map((opt, i) => (
+              {closets.map((opt, idx) => (
                 <React.Fragment key={opt.id}>
-                  {i > 0 && <tr><td colSpan={2} style={{ borderTop: "1pt solid #666", padding: 0, height: 0 }} /></tr>}
-                  {(opt.baseImg || opt.img) && <AfCompareImgRow baseSrc={opt.baseImg} selSrc={opt.img} />}
-                  <tr><td>—</td><td>{opt.label}</td></tr>
-                  <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
+                  {(opt.baseImg || opt.img) && (
+                    <tr>
+                      <td className="af-tc">{opt.baseImg ? <img src={opt.baseImg} className="af-fw" alt="" /> : "—"}</td>
+                      <td className="af-tc">{opt.img ? <img src={opt.img} className="af-fw" alt="" /> : "—"}</td>
+                    </tr>
+                  )}
+                  <tr style={idx > 0 ? { borderTop: "1pt solid #666" } : undefined}>
+                    <td>{opt.base || "—"}</td>
+                    <td>{opt.label}</td>
+                  </tr>
                   <tr>
-                    <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(opt.id)} /></span></td>
-                    <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(opt.id)} /></span></td>
+                    <td className="af-pr">—</td>
+                    <td className="af-pr">공급금액 : {f(opt.price)}</td>
+                  </tr>
+                  <tr>
+                    <td className="af-st">
+                      <span className="af-contractor-seal-row">
+                        <span className="af-contractor-label">계약자:</span> <Seal active={!on(opt.id)} />
+                      </span>
+                    </td>
+                    <td className="af-st">
+                      <span className="af-contractor-seal-row">
+                        <span className="af-contractor-label">계약자:</span> <Seal active={on(opt.id)} />
+                      </span>
+                    </td>
                   </tr>
                 </React.Fragment>
               ))}
             </tbody></table>
-            {closets.some((o) => o.notes?.length) && (
-              <div className="af-notes">
-                {closets.flatMap((o) => o.notes || []).map((n, i) => (
-                  <div key={i}>{n}</div>
-                ))}
-              </div>
-            )}
+            {closets.map((opt) => opt.notes && <div key={opt.id + "-notes"} className="af-notes">{opt.notes.map((n, i) => <div key={i}>{n}</div>)}</div>)}
           </div>
         </div>
         <div className="afc">
@@ -1659,7 +1665,7 @@ export function App() {
                           return (
                             <div key={opt.id} className={'app-item'+(isOn?' on':'')}>
                               <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                              <CmpCompareImages baseSrc={opt.baseImg} selSrc={opt.img} />
+                              <div className="cmp-imgs"><div className="cmp-img">{opt.baseImg?<img src={opt.baseImg} alt="미선택형"/>:<div className="img-ph">📷</div>}</div><div className="cmp-img">{opt.img?<img src={opt.img} alt="선택형"/>:<div className="img-ph">📷</div>}</div></div>
                               <div className="cmp-cols">
                                 <div className="cmp-col"><div className="cmp-desc">미선택형</div><div className="cmp-dash">–</div></div>
                                 <div className="cmp-col"><div style={ {fontWeight:700,marginBottom:'.25rem'} }>{opt.name}</div>{opt.model&&<div style={ {fontSize:'.75rem',color:'#64748b',marginBottom:'.5rem'} }>{opt.model}</div>}<div className="cmp-desc">선택형</div><div className="cmp-price">공급금액 : {fmt(opt.price)}</div><div style={ {marginTop:'.5rem',textAlign:'right'} }><button className={'toggle-btn sm'+(isOn?' on':'')} onClick={()=>toggle(opt.id)}>{isOn?'선택됨':'선택'}</button></div></div>
@@ -1695,7 +1701,7 @@ export function App() {
                   <div className="cmp-card">
                     <div className="cmp-head">▣ {cat} 옵션 선택</div>
                     <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                    {hasImg && <CmpCompareImages baseSrc={imgOpt.baseImg} selSrc={imgOpt.img} basePh="📷 미선택형" selPh="📷 선택형" />}
+                    {hasImg && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
                     {catOpts.map(opt => {
                       const isOn = sel[opt.id] !== undefined;
                       const isExcl = opt.group && allOpts.some(o => o.group===opt.group && o.id!==opt.id && sel[o.id]!==undefined);
