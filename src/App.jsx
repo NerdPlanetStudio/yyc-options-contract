@@ -1097,18 +1097,18 @@ const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 /** 옵션 카드 — 미선택/선택 2열 이미지를 동일 크기 박스에 맞춤 */
 function CmpCompareImages({ baseSrc, selSrc, basePh = "📷", selPh = "📷" }) {
   return (
-    <motion class="cmp-imgs">
+    <div className="cmp-imgs">
       <div className="cmp-img">
         <div className="cmp-img-frame">
           {baseSrc ? <img src={baseSrc} alt="미선택형" /> : <div className="img-ph">{basePh}</div>}
         </div>
       </div>
       <div className="cmp-img">
-        <motion class="cmp-img-frame">
-          {selSrc ? <img src={selSrc} alt="선택형" /> : <div className="img-ph">{selPh}</motion>}
-        </motion>
-      </motion>
-    </motion>
+        <div className="cmp-img-frame">
+          {selSrc ? <img src={selSrc} alt="선택형" /> : <div className="img-ph">{selPh}</div>}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1240,19 +1240,26 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
               <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
               <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
             </tr></thead><tbody>
-              {c1&&<React.Fragment><tr>
-                <td className="af-tc">{c1.baseImg?<img src={c1.baseImg} className="af-fw"/>:'—'}</td>
-                <td className="af-tc">{c1.img?<img src={c1.img} className="af-fw"/>:'—'}</td>
-              </tr><tr><td>—</td><td>{c1.label}</td></tr>
-              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c1.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c1.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c1.id)}/></span></td></tr>
-              </React.Fragment>}
-              {c2&&<React.Fragment><tr style={ {borderTop:'1pt solid #666'} }><td>—</td><td>{c2.label}</td></tr>
-              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c2.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c2.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c2.id)}/></span></td></tr>
-              </React.Fragment>}
+                            {closets.map((opt, i) => (
+                <React.Fragment key={opt.id}>
+                  {i > 0 && <tr><td colSpan={2} style={{ borderTop: "1pt solid #666", padding: 0, height: 0 }} /></tr>}
+                  {(opt.baseImg || opt.img) && <AfCompareImgRow baseSrc={opt.baseImg} selSrc={opt.img} />}
+                  <tr><td>—</td><td>{opt.label}</td></tr>
+                  <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
+                  <tr>
+                    <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(opt.id)} /></span></td>
+                    <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(opt.id)} /></span></td>
+                  </tr>
+                </React.Fragment>
+              ))}
             </tbody></table>
-            {c2&&c2.notes&&<div className="af-notes">{c2.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
+            {closets.some((o) => o.notes?.length) && (
+              <div className="af-notes">
+                {closets.flatMap((o) => o.notes || []).map((n, i) => (
+                  <div key={i}>{n}</div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="afc">
@@ -1652,7 +1659,7 @@ export function App() {
                           return (
                             <div key={opt.id} className={'app-item'+(isOn?' on':'')}>
                               <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                              <div className="cmp-imgs"><div className="cmp-img">{opt.baseImg?<img src={opt.baseImg} alt="미선택형"/>:<div className="img-ph">📷</div>}</div><div className="cmp-img">{opt.img?<img src={opt.img} alt="선택형"/>:<div className="img-ph">📷</div>}</div></div>
+                              <CmpCompareImages baseSrc={opt.baseImg} selSrc={opt.img} />
                               <div className="cmp-cols">
                                 <div className="cmp-col"><div className="cmp-desc">미선택형</div><div className="cmp-dash">–</div></div>
                                 <div className="cmp-col"><div style={ {fontWeight:700,marginBottom:'.25rem'} }>{opt.name}</div>{opt.model&&<div style={ {fontSize:'.75rem',color:'#64748b',marginBottom:'.5rem'} }>{opt.model}</div>}<div className="cmp-desc">선택형</div><div className="cmp-price">공급금액 : {fmt(opt.price)}</div><div style={ {marginTop:'.5rem',textAlign:'right'} }><button className={'toggle-btn sm'+(isOn?' on':'')} onClick={()=>toggle(opt.id)}>{isOn?'선택됨':'선택'}</button></div></div>
@@ -1688,7 +1695,7 @@ export function App() {
                   <div className="cmp-card">
                     <div className="cmp-head">▣ {cat} 옵션 선택</div>
                     <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                    {hasImg && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
+                    {hasImg && <CmpCompareImages baseSrc={imgOpt.baseImg} selSrc={imgOpt.img} basePh="📷 미선택형" selPh="📷 선택형" />}
                     {catOpts.map(opt => {
                       const isOn = sel[opt.id] !== undefined;
                       const isExcl = opt.group && allOpts.some(o => o.group===opt.group && o.id!==opt.id && sel[o.id]!==undefined);
