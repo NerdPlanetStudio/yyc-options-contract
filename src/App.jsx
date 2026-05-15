@@ -588,8 +588,22 @@ function escapeHtmlAttr(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+/** 본문 텍스트 escape (innerHTML 안에 사용자 입력을 직접 넣지 않기 위함) */
+function escapeHtml(value) {
+  return escapeHtmlAttr(value);
+}
+
+/** 서명 이미지 src 화이트리스트: data:image/(png|jpeg|jpg|gif|webp);base64,… */
+function safeSignatureSrc(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  if (!/^data:image\/(png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(s)) return "";
+  return s;
 }
 
 export function renderAdminDashboardIfNeeded() {
@@ -604,7 +618,7 @@ export function renderAdminDashboardIfNeeded() {
   const shell = document.getElementById("yyc-admin-shell");
 
   const renderLogin = (message = "") => {
-    shell.innerHTML = `<div class="admin-card admin-login"><div class="admin-title"><h1>관리자 로그인</h1><p>청량리역 요진 와이시티 옵션 신청 접수 관리</p></div><form id="admin-login-form"><div class="admin-field"><label>이메일</label><input class="admin-input" name="email" type="email" autocomplete="email" placeholder="관리자 이메일" required /></div><div class="admin-field"><label>비밀번호</label><input class="admin-input" name="password" type="password" autocomplete="current-password" placeholder="비밀번호" required /></div><button class="admin-btn" style="width:100%" type="submit">로그인</button>${message ? `<div class="admin-error">${message}</div>` : ""}</form></div>`;
+    shell.innerHTML = `<div class="admin-card admin-login"><div class="admin-title"><h1>관리자 로그인</h1><p>청량리역 요진 와이시티 옵션 신청 접수 관리</p></div><form id="admin-login-form"><div class="admin-field"><label>이메일</label><input class="admin-input" name="email" type="email" autocomplete="email" placeholder="관리자 이메일" required /></div><div class="admin-field"><label>비밀번호</label><input class="admin-input" name="password" type="password" autocomplete="current-password" placeholder="비밀번호" required /></div><button class="admin-btn" style="width:100%" type="submit">로그인</button>${message ? `<div class="admin-error">${escapeHtml(message)}</div>` : ""}</form></div>`;
 
     document.getElementById("admin-login-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -667,15 +681,15 @@ export function renderAdminDashboardIfNeeded() {
         const dongAttr = escapeHtmlAttr(dong);
 
         listCard.innerHTML = `<div class="admin-filters"><input id="admin-search" class="admin-input" placeholder="고객명/동호/휴대폰뒷자리/접수번호 검색" value="${kwAttr}" /><input id="admin-dong-filter" class="admin-input" placeholder="동 검색" value="${dongAttr}" /><select id="admin-type-filter" class="admin-select"><option value="">전체 타입</option>${typeOptions}</select><select id="admin-status-filter" class="admin-select"><option value="">전체 상태</option><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select><button type="button" class="admin-btn secondary" id="admin-xlsx-download">엑셀(.xlsx) 내려받기</button><button type="button" class="admin-btn danger" id="admin-filter-reset" title="접수 DB와 Storage 누적 엑셀을 초기화합니다">초기화</button></div><div class="admin-layout"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>접수번호</th><th>접수일시</th><th>동/호</th><th>타입</th><th>총액</th><th>휴대폰 뒷자리</th><th>고객명</th><th>상태</th></tr></thead><tbody>${filtered.map((r) => `
-                    <tr data-id="${r.id}" class="${selected?.id === r.id ? "active" : ""}">
-                      <td style="font-size:12px;white-space:nowrap">${r.receipt_no || "-"}</td>
-                      <td>${formatAdminDate(r.created_at)}</td>
-                      <td>${r.dong || "-"}동 ${r.ho || "-"}호</td>
-                      <td>${r.unit_type || "-"}</td>
-                      <td class="admin-price">${formatAdminPrice(r.total_price)}</td>
-                      <td>${formatPhoneTailDisplay(r.phone)}</td>
-                      <td><b>${r.customer_name || "-"}</b></td>
-                      <td><span class="admin-badge ${statusClass(r.status)}">${r.status || "접수됨"}</span></td>
+                    <tr data-id="${escapeHtmlAttr(r.id)}" class="${selected?.id === r.id ? "active" : ""}">
+                      <td style="font-size:12px;white-space:nowrap">${escapeHtml(r.receipt_no || "-")}</td>
+                      <td>${escapeHtml(formatAdminDate(r.created_at))}</td>
+                      <td>${escapeHtml(r.dong || "-")}동 ${escapeHtml(r.ho || "-")}호</td>
+                      <td>${escapeHtml(r.unit_type || "-")}</td>
+                      <td class="admin-price">${escapeHtml(formatAdminPrice(r.total_price))}</td>
+                      <td>${escapeHtml(formatPhoneTailDisplay(r.phone))}</td>
+                      <td><b>${escapeHtml(r.customer_name || "-")}</b></td>
+                      <td><span class="admin-badge ${statusClass(r.status)}">${escapeHtml(r.status || "접수됨")}</span></td>
                     </tr>
                   `).join("") || `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:32px">접수 기록이 없습니다.</td></tr>`}</tbody></table></div><div class="admin-card admin-detail" id="admin-detail"></div></div>`;
 
@@ -822,12 +836,13 @@ export function renderAdminDashboardIfNeeded() {
         const totalNum = Number(selected.total_price) || 0;
         const sumMatch = Math.abs(optSum - totalNum) < 0.01 ? "일치" : "불일치(점검)";
 
-        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${selected.receipt_no || "-"}</span><b>접수일시</b><span>${formatAdminDate(selected.created_at)}</span><b>고객명</b><span>${selected.customer_name || "-"}</span><b>휴대폰 뒷자리</b><span>${formatPhoneTailDisplay(selected.phone)}</span><b>동/호</b><span>${selected.dong || "-"}동 ${selected.ho || "-"}호</span><b>타입</b><span>${selected.unit_type || "-"}</span><b>옵션금액소계</b><span class="admin-price" style="text-align:left">${formatAdminPrice(optSum)}</span><b>총액</b><span class="admin-price" style="text-align:left">${formatAdminPrice(selected.total_price)}</span><b>금액일치</b><span>${sumMatch}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
+        const sigSrc = safeSignatureSrc(selected.signature_data_url);
+        box.innerHTML = `<h2>접수 상세</h2><div class="admin-kv"><b>접수번호</b><span>${escapeHtml(selected.receipt_no || "-")}</span><b>접수일시</b><span>${escapeHtml(formatAdminDate(selected.created_at))}</span><b>고객명</b><span>${escapeHtml(selected.customer_name || "-")}</span><b>휴대폰 뒷자리</b><span>${escapeHtml(formatPhoneTailDisplay(selected.phone))}</span><b>동/호</b><span>${escapeHtml(selected.dong || "-")}동 ${escapeHtml(selected.ho || "-")}호</span><b>타입</b><span>${escapeHtml(selected.unit_type || "-")}</span><b>옵션금액소계</b><span class="admin-price" style="text-align:left">${escapeHtml(formatAdminPrice(optSum))}</span><b>총액</b><span class="admin-price" style="text-align:left">${escapeHtml(formatAdminPrice(selected.total_price))}</span><b>금액일치</b><span>${escapeHtml(sumMatch)}</span></div><div class="admin-field"><label>처리 상태</label><select class="admin-select" id="admin-detail-status"><option value="접수됨">접수됨</option><option value="확인중">확인중</option><option value="계약완료">계약완료</option><option value="취소">취소</option></select></div><div class="admin-options">${options.map((o) => `
               <div class="admin-option">
-                <span><b>${o.category || "-"}</b><br>${o.label || o.name || "-"}</span>
-                <b>${formatAdminPrice(o.price)}</b>
+                <span><b>${escapeHtml(o.category || "-")}</b><br>${escapeHtml(o.label || o.name || "-")}</span>
+                <b>${escapeHtml(formatAdminPrice(o.price))}</b>
               </div>
-            `).join("") || `<div style="color:#94a3b8;font-size:13px">선택 옵션 없음</div>`}</div><div class="admin-field"><label>서명</label>${selected.signature_data_url ? `<img class="admin-sign" src="${selected.signature_data_url}" alt="서명" />` : `<span style="color:#94a3b8;font-size:13px">서명 없음</span>`}</div><div class="admin-field"><label>관리자 메모</label><textarea class="admin-textarea" id="admin-detail-memo" placeholder="확인 내용이나 특이사항을 입력하세요.">${selected.admin_memo || ""}</textarea></div><button class="admin-btn" id="admin-detail-save" style="width:100%">상태/메모 저장</button><div id="admin-detail-msg" class="admin-loading"></div>`;
+            `).join("") || `<div style="color:#94a3b8;font-size:13px">선택 옵션 없음</div>`}</div><div class="admin-field"><label>서명</label>${sigSrc ? `<img class="admin-sign" src="${escapeHtmlAttr(sigSrc)}" alt="서명" />` : `<span style="color:#94a3b8;font-size:13px">서명 없음</span>`}</div><div class="admin-field"><label>관리자 메모</label><textarea class="admin-textarea" id="admin-detail-memo" placeholder="확인 내용이나 특이사항을 입력하세요.">${escapeHtml(selected.admin_memo || "")}</textarea></div><button class="admin-btn" id="admin-detail-save" style="width:100%">상태/메모 저장</button><div id="admin-detail-msg" class="admin-loading"></div>`;
 
         document.getElementById("admin-detail-status").value = selected.status || "접수됨";
 
