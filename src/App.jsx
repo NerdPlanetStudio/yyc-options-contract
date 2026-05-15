@@ -1094,10 +1094,17 @@ async function downloadApplicationsXlsx(rows) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
-function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
+/** PDF 신청서 2면 인쇄 양식 — typeData(평형 카탈로그) 기준으로 55A·59A 등 공통 */
+function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho }) {
   if(!typeData) return null;
   const f=(n)=>String.fromCharCode(8361)+n.toLocaleString('ko-KR');
   const on=(id)=>sel[id]!==undefined;
+  const appliances = getAppliances(typeData);
+  const fridge = appliances.find((a) => a.id === "a_fr");
+  const bathApps = appliances.filter((a) => /^a_b/.test(a.id));
+  const kitApps = appliances.filter((a) =>
+    ["a_ind", "a_oven", "a_dish", "a_ac", "a_vent"].includes(a.id)
+  );
   const Seal=({active})=>(
     <span className="af-seal">
       <span className="af-seal-chop">(인)</span>
@@ -1158,25 +1165,8 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
   const l=typeData.opts.find(o=>o.id==='living');
   const b=typeData.opts.find(o=>o.id==='bath');
   const k=typeData.opts.find(o=>o.id==='kitchen');
-  const c1=typeData.opts.find(o=>o.id==='closet_침실1');
-  const c2=typeData.opts.find(o=>o.id==='closet_침실2');
-  const sp=typeData.opts.find(o=>o.id==='space');
-  const bathApps=typeData.dual?[
-    {id:'a_bt1',name:'욕실1 비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
-    {id:'a_bd1',name:'욕실1 비데',model:'대림통상 DB-4210',base:'—',price:200000},
-    {id:'a_bt2',name:'욕실2 비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
-    {id:'a_bd2',name:'욕실2 비데',model:'대림통상 DB-4210',base:'—',price:200000}
-  ]:[
-    {id:'a_bt',name:'비데일체형 양변기',model:'대림바스 DST-690',base:'—',price:700000},
-    {id:'a_bd',name:'비데',model:'대림통상 DB-4210',base:'—',price:200000}
-  ];
-  const kitApps=[
-    {id:'a_ind',name:'3구 인덕션',model:'하츠 SSIH-3605TTLB',base:'가스쿡탑',price:400000},
-    {id:'a_oven',name:'빌트인오븐',model:'삼성 NQ36A6555CK',base:'가구(여닫이장)',price:500000},
-    {id:'a_dish',name:'식기세척기',model:'삼성 DW80F71Y1SEW',base:'가구(여닫이장)',price:1200000},
-    {id:'a_ac',name:'시스템에어컨',model:'LG',base:'—',price:typeData.ac,note:'*거실 및 침실'},
-    {id:'a_vent',name:'스마트복합환풍기',model:'힘펠 FHD3-C150P',base:'—',price:typeData.vent,note:typeData.vent>600000?'욕실 2개소':''}
-  ];
+  const closets = typeData.opts.filter((o) => o.cat === "붙박이장");
+  const sp = typeData.opts.find((o) => o.id === "space");
   const now=new Date();
   const dateStr=now.getFullYear()+'. '+(now.getMonth()+1)+'. '+now.getDate()+'.';
   return(
@@ -1185,11 +1175,40 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
         <div className="afc">
           <div className="afs-t">가전 옵션 선택 품목</div>
           <table className="af-at"><thead><tr><th style={ {width:'28%'} }>품목</th><th>미선택형 / 선택형</th><th style={ {width:'18%'} }>계약자 확인</th></tr></thead><tbody>
-            <tr><td rowSpan={2}><div style={ {fontWeight:600} }>냉장고패키지</div><div className="af-sg2">냉장고: 삼성 RR40C7995AP<br/>냉동고: 삼성 RZ34C7965AP<br/>김치냉장고: 삼성 RQ34C7945AP</div></td>
-              <td><span className="af-lb">미선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/N4lwIZD.png"/><div className="af-pr">—</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on('a_fr')}/></span></td></tr>
-            <tr><td><span className="af-ls">선택형</span><br/><img className="af-at-img" src="https://i.imgur.com/wFVmKCn.png"/><div className="af-pr">공급금액: {f(7300000)}</div></td>
-              <td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on('a_fr')}/></span></td></tr>
+            {fridge && (
+              <React.Fragment>
+                <tr>
+                  <td rowSpan={2}>
+                    <div style={{ fontWeight: 600 }}>{fridge.name}</div>
+                    <div className="af-sg2">{fridge.model}</div>
+                  </td>
+                  <td>
+                    <span className="af-lb">미선택형</span>
+                    <br />
+                    {fridge.baseImg ? <img className="af-at-img" src={fridge.baseImg} alt="" /> : null}
+                    <div className="af-pr">—</div>
+                  </td>
+                  <td className="af-st">
+                    <span className="af-contractor-seal-row">
+                      <span className="af-contractor-label">계약자:</span> <Seal active={!on(fridge.id)} />
+                    </span>
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span className="af-ls">선택형</span>
+                    <br />
+                    {fridge.img ? <img className="af-at-img" src={fridge.img} alt="" /> : null}
+                    <div className="af-pr">공급금액: {f(fridge.price)}</div>
+                  </td>
+                  <td className="af-st">
+                    <span className="af-contractor-seal-row">
+                      <span className="af-contractor-label">계약자:</span> <Seal active={on(fridge.id)} />
+                    </span>
+                  </td>
+                </tr>
+              </React.Fragment>
+            )}
             {bathApps.map(it=><AppRow key={it.id} it={it}/>)}
           </tbody></table>
           <div className="af-notes">※ 가전옵션 제품은 설치시점에 단종 등 사유로 동등 이상 제품 변경 가능<br/>※ 냉장고패키지 선택시 냉장/냉동/김치 순 배열 고정, 도어방향은 설치 위치에 따라 다를 수 있음</div>
@@ -1215,19 +1234,38 @@ function ApplicationForm59A({ typeData, sel, signData, contractor, dong, ho }) {
               <th className="aft-h"><span className="af-lb">기본</span> 미선택형</th>
               <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
             </tr></thead><tbody>
-              {c1&&<React.Fragment><tr>
-                <td className="af-tc">{c1.baseImg?<img src={c1.baseImg} className="af-fw"/>:'—'}</td>
-                <td className="af-tc">{c1.img?<img src={c1.img} className="af-fw"/>:'—'}</td>
-              </tr><tr><td>—</td><td>{c1.label}</td></tr>
-              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c1.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c1.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c1.id)}/></span></td></tr>
-              </React.Fragment>}
-              {c2&&<React.Fragment><tr style={ {borderTop:'1pt solid #666'} }><td>—</td><td>{c2.label}</td></tr>
-              <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(c2.price)}</td></tr>
-              <tr><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={!on(c2.id)}/></span></td><td className="af-st"><span className="af-contractor-seal-row"><span className="af-contractor-label">계약자:</span> <Seal active={on(c2.id)}/></span></td></tr>
-              </React.Fragment>}
+              {closets.map((opt, idx) => (
+                <React.Fragment key={opt.id}>
+                  {(opt.baseImg || opt.img) && (
+                    <tr>
+                      <td className="af-tc">{opt.baseImg ? <img src={opt.baseImg} className="af-fw" alt="" /> : "—"}</td>
+                      <td className="af-tc">{opt.img ? <img src={opt.img} className="af-fw" alt="" /> : "—"}</td>
+                    </tr>
+                  )}
+                  <tr style={idx > 0 ? { borderTop: "1pt solid #666" } : undefined}>
+                    <td>{opt.base || "—"}</td>
+                    <td>{opt.label}</td>
+                  </tr>
+                  <tr>
+                    <td className="af-pr">—</td>
+                    <td className="af-pr">공급금액 : {f(opt.price)}</td>
+                  </tr>
+                  <tr>
+                    <td className="af-st">
+                      <span className="af-contractor-seal-row">
+                        <span className="af-contractor-label">계약자:</span> <Seal active={!on(opt.id)} />
+                      </span>
+                    </td>
+                    <td className="af-st">
+                      <span className="af-contractor-seal-row">
+                        <span className="af-contractor-label">계약자:</span> <Seal active={on(opt.id)} />
+                      </span>
+                    </td>
+                  </tr>
+                </React.Fragment>
+              ))}
             </tbody></table>
-            {c2&&c2.notes&&<div className="af-notes">{c2.notes.map((n,i)=><div key={i}>{n}</div>)}</div>}
+            {closets.map((opt) => opt.notes && <div key={opt.id + "-notes"} className="af-notes">{opt.notes.map((n, i) => <div key={i}>{n}</div>)}</div>)}
           </div>
         </div>
         <div className="afc">
@@ -1703,7 +1741,7 @@ export function App() {
   }
 
   const contractForm = (
-    <ApplicationForm59A typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho} />
+    <ApplicationFormPrint typeData={typeData} sel={sel} signData={signData} contractor={contractor} dong={dong} ho={ho} />
   );
 
   const contractPreviewModal =

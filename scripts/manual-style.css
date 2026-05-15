@@ -1,0 +1,151 @@
+@page {
+  size: A4 portrait;
+  margin: 18mm 14mm 18mm 14mm;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+    "Pretendard", "Noto Sans KR", "Helvetica Neue", Arial, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.55;
+  color: #1f2937;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 22pt;
+  margin-top: 26pt;
+  margin-bottom: 12pt;
+  border-bottom: 2px solid #2563eb;
+  padding-bottom: 6pt;
+  page-break-before: always;
+  page-break-after: avoid;
+  color: #1e3a8a;
+}
+
+h1:first-of-type {
+  page-break-before: auto;
+}
+
+h2 {
+  font-size: 15pt;
+  margin-top: 18pt;
+  margin-bottom: 6pt;
+  color: #1e40af;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  margin-top: 12pt;
+  margin-bottom: 4pt;
+  color: #1e3a8a;
+  page-break-after: avoid;
+}
+
+h4 {
+  font-size: 11pt;
+  margin-top: 10pt;
+  margin-bottom: 4pt;
+  page-break-after: avoid;
+}
+
+p, li {
+  orphans: 3;
+  widows: 3;
+}
+
+blockquote {
+  margin: 8pt 0;
+  padding: 8pt 12pt;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  border-radius: 4px;
+  page-break-inside: avoid;
+}
+
+blockquote p { margin: 4pt 0; }
+
+code {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: "SFMono-Regular", "Menlo", "Consolas", monospace;
+  font-size: 9.5pt;
+  color: #be185d;
+}
+
+pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 10pt 12pt;
+  font-size: 8.8pt;
+  line-height: 1.45;
+  overflow-x: auto;
+  page-break-inside: avoid;
+  margin: 8pt 0;
+}
+
+pre code {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  font-size: inherit;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8pt 0;
+  font-size: 9.5pt;
+  page-break-inside: avoid;
+}
+
+th, td {
+  border: 1px solid #cbd5e1;
+  padding: 5pt 7pt;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  background: #e0e7ff;
+  font-weight: 600;
+}
+
+tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+hr {
+  border: none;
+  border-top: 1px dashed #cbd5e1;
+  margin: 12pt 0;
+}
+
+ul, ol {
+  padding-left: 20pt;
+  margin: 6pt 0;
+}
+
+li { margin: 2pt 0; }
+
+a {
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+img { max-width: 100%; }
+
+.page-break {
+  page-break-after: always;
+}
+
+strong { color: #111827; }
+
+/* checklist item */
+li input[type="checkbox"] { margin-right: 4px; }

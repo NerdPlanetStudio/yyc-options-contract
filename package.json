@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "db:residents-sql": "node scripts/residents-json-to-sql.mjs",
     "sync:xlsx": "node scripts/sync-applications-to-xlsx.mjs",
-    "sync:xlsx:watch": "node scripts/sync-applications-to-xlsx.mjs --watch --interval=25"
+    "sync:xlsx:watch": "node scripts/sync-applications-to-xlsx.mjs --watch --interval=25",
+    "manual:merge": "node scripts/build-manual.mjs",
+    "manual:html": "node scripts/build-html.mjs",
+    "manual:build": "npm run manual:merge && npm run manual:html",
+    "manual:pdf": "npm run manual:build && node scripts/build-pdf.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
@@ -27,6 +31,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
+    "marked": "^13.0.0",
     "supabase": "^2.98.2",
     "vite": "^8.0.10"
   }

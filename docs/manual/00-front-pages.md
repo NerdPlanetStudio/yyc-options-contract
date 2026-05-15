@@ -1,0 +1,578 @@
+<!-- 앞장 (front-pages.html) — MANUAL-FULL 맨 앞 HTML 블록 -->
+<div class="manual-front-pages">
+<style>
+.manual-front-pages *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;background:#f0f0f0}
+
+  /* ── 페이지 공통 ── */
+  .manual-front-pages .page{
+    width:210mm;min-height:297mm;
+    margin:0 auto 20px;
+    position:relative;overflow:hidden;
+    page-break-after:always;
+  }
+
+  /* ══════════════════════════════
+     PAGE 1 — 표지
+  ══════════════════════════════ */
+  .cover{
+    background:#0A1628;
+    color:#fff;
+    display:flex;flex-direction:column;
+    padding:56px 64px;
+    justify-content:space-between;
+  }
+  .cover-grid{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    background-image:
+      linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size:36px 36px;
+    pointer-events:none;
+  }
+  .cover-accent{width:56px;height:4px;background:#0D9488;border-radius:2px;position:relative;z-index:1}
+  .cover-main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:0;position:relative;z-index:1;padding:48px 0 32px}
+  .cover-label{font-size:11px;letter-spacing:3px;color:#64748B;text-transform:uppercase;margin-bottom:28px;font-weight:400}
+  .cover-title-sub{font-size:40px;font-weight:700;line-height:1.15;color:#0D9488;margin-bottom:6px}
+  .cover-title-main{font-size:40px;font-weight:700;line-height:1.15;color:#F1F5F9;margin-bottom:32px}
+  .cover-divider{width:48px;height:1px;background:#1E3A5F;margin-bottom:32px}
+  .cover-desc{font-size:19px;color:#94A3B8;font-weight:300;margin-bottom:10px;line-height:1.5}
+  .cover-subdesc{font-size:14px;color:#475569;line-height:1.6}
+  .cover-stack{border-top:1px solid #1E293B;padding-top:28px;position:relative;z-index:1}
+  .cover-stack-label{font-size:10px;letter-spacing:2.5px;color:#334155;text-transform:uppercase;margin-bottom:14px}
+  .stack-row{display:flex;gap:12px;flex-wrap:wrap}
+  .stack-badge{
+    padding:5px 14px;font-size:12px;border-radius:4px;font-weight:500;
+    border:1px solid;letter-spacing:.3px;
+  }
+  .badge-react{background:#0A1F3C;border-color:#1E3A5F;color:#60A5FA}
+  .badge-supa{background:#071E1E;border-color:#0F3030;color:#2DD4BF}
+  .badge-github{background:#0F1E30;border-color:#1E2F44;color:#7DD3FC}
+  .badge-cursor{background:#150F2E;border-color:#2A1A50;color:#A78BFA}
+  .badge-sql{background:#1A1200;border-color:#382500;color:#FBB83A}
+  .cover-footer{
+    display:flex;justify-content:space-between;align-items:center;
+    margin-top:28px;padding-top:18px;border-top:1px solid #1E293B;
+    font-size:11px;color:#334155;position:relative;z-index:1;
+  }
+
+  /* ══════════════════════════════
+     PAGE 2 — 목차
+  ══════════════════════════════ */
+  .toc{
+    background:#ffffff;
+    padding:52px 58px;
+    display:flex;flex-direction:column;
+  }
+  .toc-header{margin-bottom:36px}
+  .toc-title{font-size:28px;font-weight:700;color:#0F172A;letter-spacing:-.3px;margin-bottom:8px}
+  .toc-underline{width:40px;height:3px;background:#0D9488;border-radius:2px}
+  .toc-parts{display:flex;flex-direction:column;gap:18px}
+  .toc-part{}
+  .part-header{
+    display:flex;align-items:center;gap:10px;
+    margin-bottom:8px;padding-bottom:6px;
+    border-bottom:1px solid #E2E8F0;
+  }
+  .part-num{
+    font-size:10px;font-weight:700;color:#fff;
+    background:#0D9488;border-radius:3px;
+    padding:2px 7px;letter-spacing:.5px;
+  }
+  .part-num.p2{background:#3B82F6}
+  .part-num.p3{background:#6366F1}
+  .part-num.p4{background:#8B5CF6}
+  .part-num.p5{background:#F59E0B}
+  .part-num.p6{background:#EF4444}
+  .part-num.pa{background:#64748B}
+  .part-title{font-size:13px;font-weight:700;color:#1E293B;flex:1}
+  .chapter-list{display:flex;flex-direction:column;gap:3px}
+  .chapter-item{
+    display:flex;align-items:baseline;gap:8px;
+    padding:2px 4px;border-radius:3px;
+  }
+  .ch-num{font-size:11px;font-weight:700;color:#94A3B8;min-width:32px}
+  .ch-title{font-size:12px;color:#334155;flex:1;line-height:1.4}
+  .ch-star{font-size:10px;color:#CBD5E1;white-space:nowrap}
+  .ch-star.s1{color:#FCD34D}
+  .ch-star.s2{color:#F59E0B}
+  .ch-star.s3{color:#F97316}
+  .ch-star.s4{color:#EF4444}
+  .toc-legend{
+    margin-top:18px;padding:10px 14px;
+    background:#F8FAFC;border-radius:6px;
+    border:1px solid #E2E8F0;
+    font-size:10px;color:#64748B;line-height:1.8;
+  }
+
+  /* ══════════════════════════════
+     PAGE 3 — 파이프라인
+  ══════════════════════════════ */
+  .pipeline{
+    background:#ffffff;
+    padding:48px 52px;
+    display:flex;flex-direction:column;
+  }
+  .pipe-header{margin-bottom:28px}
+  .pipe-title{font-size:22px;font-weight:700;color:#0F172A;margin-bottom:6px}
+  .pipe-sub{font-size:13px;color:#64748B}
+  .pipe-section-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;margin:16px 0 10px;color:#94A3B8}
+  .pipe-section-label.first{margin-top:0}
+  .pipe-svg-wrap{width:100%}
+
+  @media print{
+    .manual-front-pages{background:#fff}
+    .manual-front-pages .page{margin:0;page-break-after:always}
+  }
+
+/* PDF: 각 앞장 페이지 분리 (마지막 장 뒤 빈 페이지 방지) */
+.manual-front-pages .page {
+  page-break-after: always !important;
+  break-after: page !important;
+}
+.manual-front-pages .page:last-child {
+  page-break-after: auto !important;
+  break-after: auto !important;
+}
+@media print {
+  .manual-front-pages .page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+  .manual-front-pages .page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+}
+
+</style>
+
+<!-- ════════════════════════════════
+     PAGE 1 : 표지
+════════════════════════════════ -->
+<div class="page cover">
+  <div class="cover-grid"></div>
+
+  <div class="cover-accent"></div>
+
+  <div class="cover-main">
+    <div class="cover-label">Full-Stack Development Manual · 풀스택 실전 매뉴얼</div>
+    <div class="cover-title-sub">○○아파트</div>
+    <div class="cover-title-main">옵션 신청 시스템 만들기</div>
+    <div class="cover-divider"></div>
+    <div class="cover-desc">코딩 0회차를 위한 풀스택 실전 매뉴얼</div>
+    <div class="cover-subdesc">
+      마우스 클릭 + AI 복붙만으로 완성하는 실전 SaaS 시스템<br>
+      0장 ~ 20장 + 부록 A·B·C·D
+    </div>
+  </div>
+
+  <div class="cover-stack">
+    <div class="cover-stack-label">기술 스택</div>
+    <div class="stack-row">
+      <span class="stack-badge badge-react">React + Vite</span>
+      <span class="stack-badge badge-supa">Supabase</span>
+      <span class="stack-badge badge-github">GitHub Pages</span>
+      <span class="stack-badge badge-cursor">Cursor AI</span>
+      <span class="stack-badge badge-sql">PostgreSQL · Edge Functions</span>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>v1.0 &nbsp;·&nbsp; 2026년 5월</span>
+    <span>코딩 0회차 기준 &nbsp;·&nbsp; 21개 챕터 + 부록</span>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════
+     PAGE 2 : 목차
+════════════════════════════════ -->
+<div class="page toc">
+  <div class="toc-header">
+    <div class="toc-title">목차</div>
+    <div class="toc-underline"></div>
+  </div>
+
+  <div class="toc-parts">
+
+    <!-- 1부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num">1부</span>
+        <span class="part-title">준비 — 계정 만들고 도구 깔기</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">0장</span><span class="ch-title">준비물 — 계정 만들고 프로그램 깔기</span><span class="ch-star s1">★</span></div>
+        <div class="chapter-item"><span class="ch-num">1장</span><span class="ch-title">Cursor로 "Hello ○○아파트" 페이지 만들기</span><span class="ch-star s1">★★</span></div>
+        <div class="chapter-item"><span class="ch-num">2장</span><span class="ch-title">GitHub에 처음 올리기</span><span class="ch-star s1">★★</span></div>
+        <div class="chapter-item"><span class="ch-num">3장</span><span class="ch-title">GitHub Pages로 진짜 인터넷 주소 만들기 🏁</span><span class="ch-star s1">★★</span></div>
+      </div>
+    </div>
+
+    <!-- 2부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num p2">2부</span>
+        <span class="part-title">백엔드 토대 만들기</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">4장</span><span class="ch-title">Supabase 프로젝트 만들고 "인터넷 엑셀" 열기</span><span class="ch-star s2">★★</span></div>
+        <div class="chapter-item"><span class="ch-num">5장</span><span class="ch-title">입주민 등록부 테이블 만들기 (SQL 복붙)</span><span class="ch-star s2">★★★</span></div>
+      </div>
+    </div>
+
+    <!-- 3부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num p3">3부</span>
+        <span class="part-title">사용자 신청 흐름 — 앞 + 뒤 연결</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">6장</span><span class="ch-title">동·호·이름·휴대폰 입력 칸 만들기 🏁</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">7장</span><span class="ch-title">"다음" 누르면 진짜 입주민인지 확인하기</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">8장</span><span class="ch-title">평형별 옵션 화면 만들기</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">9장</span><span class="ch-title">신청서 작성 폼 (개인정보 입력)</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">10장</span><span class="ch-title">손가락·마우스 서명 칸 만들기</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">11장</span><span class="ch-title">신청 데이터 인터넷 엑셀(DB)에 진짜 저장</span><span class="ch-star s3">★★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">12장</span><span class="ch-title">신청 들어올 때마다 엑셀에 자동 누적</span><span class="ch-star s3">★★★★</span></div>
+      </div>
+    </div>
+
+    <!-- 4부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num p4">4부</span>
+        <span class="part-title">관리자 운영 도구</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">13장</span><span class="ch-title">관리자 로그인 + 신청 목록 화면</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">14장</span><span class="ch-title">관리자 — 신청서 상세 + 엑셀 안전 다운로드</span><span class="ch-star s3">★★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">15장</span><span class="ch-title">관리자 — 시즌 종료용 "초기화" 버튼</span><span class="ch-star s3">★★★★</span></div>
+      </div>
+    </div>
+
+    <!-- 5부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num p5">5부</span>
+        <span class="part-title">자동 배포 + 보안 + 운영</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">16장</span><span class="ch-title">GitHub Actions로 자동 배포</span><span class="ch-star s2">★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">17장</span><span class="ch-title">보안 최종 잠금 (RLS · 권한 · XSS)</span><span class="ch-star s3">★★★★</span></div>
+        <div class="chapter-item"><span class="ch-num">18장</span><span class="ch-title">운영 점검표 + 백업</span><span class="ch-star s1">★★</span></div>
+      </div>
+    </div>
+
+    <!-- 6부 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num p6">6부</span>
+        <span class="part-title">사고 대응 + 시즌 운영</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">19장</span><span class="ch-title">자주 만나는 에러 30선 — 빠른 해결 카탈로그</span><span class="ch-star s1">★</span></div>
+        <div class="chapter-item"><span class="ch-num">20장</span><span class="ch-title">시즌 시작/종료 + 인수인계 가이드</span><span class="ch-star s1">★★</span></div>
+      </div>
+    </div>
+
+    <!-- 부록 -->
+    <div class="toc-part">
+      <div class="part-header">
+        <span class="part-num pa">부록</span>
+        <span class="part-title">부록 A·B·C·D</span>
+      </div>
+      <div class="chapter-list">
+        <div class="chapter-item"><span class="ch-num">A</span><span class="ch-title">모든 SQL 한 페이지 (복붙용)</span><span class="ch-star"></span></div>
+        <div class="chapter-item"><span class="ch-num">B</span><span class="ch-title">모든 Edge Function 코드 모음</span><span class="ch-star"></span></div>
+        <div class="chapter-item"><span class="ch-num">C</span><span class="ch-title">환경변수·시크릿 전체 표</span><span class="ch-star"></span></div>
+        <div class="chapter-item"><span class="ch-num">D</span><span class="ch-title">더 안전·확장 (선택 사항)</span><span class="ch-star"></span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toc-legend">
+    <strong>난이도 안내</strong> &nbsp;·&nbsp;
+    ★ 클릭만 &nbsp;·&nbsp;
+    ★★ 약간 복붙 &nbsp;·&nbsp;
+    ★★★ AI 활용 + 검증 &nbsp;·&nbsp;
+    ★★★★ SQL / Edge Function &nbsp;·&nbsp;
+    🏁 체크포인트 챕터
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════
+     PAGE 3 : 파이프라인
+════════════════════════════════ -->
+<div class="page pipeline">
+  <div class="pipe-header">
+    <div class="pipe-title">시스템 파이프라인</div>
+    <div class="pipe-sub">배포 → 서비스 흐름 → 자동화 파이프라인 전체 구조</div>
+  </div>
+
+  <!-- 배포 레이블 -->
+  <div class="pipe-section-label first">① 배포 파이프라인</div>
+
+  <!-- 파이프라인 SVG — hardcoded colors (standalone HTML용) -->
+  <div class="pipe-svg-wrap">
+<svg width="100%" viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" role="img"
+  style="font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif">
+<title>○○아파트 옵션 신청 시스템 파이프라인</title>
+<desc>배포, 서비스, 자동화 흐름을 보여주는 시스템 파이프라인 다이어그램</desc>
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#0F6E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#854F0B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- ── ROW 1: 배포 ── -->
+<!-- 코드 Push (gray) -->
+<rect x="10" y="4" width="118" height="44" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="69" y="22" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#2C2C2A">코드 Push</text>
+<text x="69" y="38" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5F5E5A">개발자 → Git</text>
+
+<line x1="130" y1="26" x2="152" y2="26" stroke="#64748B" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- GitHub Actions (gray) -->
+<rect x="154" y="4" width="158" height="44" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="233" y="22" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#2C2C2A">GitHub Actions</text>
+<text x="233" y="38" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#5F5E5A">빌드 + 자동 배포</text>
+
+<line x1="314" y1="26" x2="336" y2="26" stroke="#64748B" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- GitHub Pages (blue) -->
+<rect x="338" y="4" width="332" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="504" y="18" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#0C447C">GitHub Pages</text>
+<text x="504" y="36" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#185FA5">React SPA · 신청 화면 + 관리자 화면 호스팅</text>
+
+<!-- 구분선 -->
+<line x1="10" y1="60" x2="670" y2="60" stroke="#CBD5E1" stroke-width="0.5" stroke-dasharray="4 3"/>
+<text x="340" y="72" text-anchor="middle" font-size="10" fill="#94A3B8" letter-spacing="1.5">② 서비스 흐름</text>
+
+<!-- ── ROW 2: 서비스 ── -->
+<!-- 입주민 신청 (teal) -->
+<rect x="10" y="80" width="178" height="56" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="99" y="100" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#085041">입주민 신청</text>
+<text x="99" y="118" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#0F6E56">검증 → 옵션 → 서명 → 저장</text>
+
+<line x1="190" y1="108" x2="230" y2="108" stroke="#0F6E56" stroke-width="1" marker-end="url(#arr-teal)"/>
+
+<!-- Supabase 백엔드 (blue) -->
+<rect x="232" y="80" width="216" height="56" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="340" y="100" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#0C447C">Supabase 백엔드</text>
+<text x="340" y="118" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#185FA5">PostgreSQL · Auth · RPC · Storage</text>
+
+<line x1="450" y1="108" x2="490" y2="108" stroke="#185FA5" stroke-width="1" marker-end="url(#arr-blue)"/>
+
+<!-- 관리자 운영 (purple) -->
+<rect x="492" y="80" width="178" height="56" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="581" y="100" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#3C3489">관리자 운영</text>
+<text x="581" y="118" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#534AB7">조회 · 다운로드 · 초기화</text>
+
+<!-- Supabase → 자동화 L-path (dashed) -->
+<path d="M340,136 L340,162 L99,162 L99,178" fill="none" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+
+<!-- 구분선 -->
+<line x1="10" y1="170" x2="670" y2="170" stroke="#CBD5E1" stroke-width="0.5" stroke-dasharray="4 3"/>
+<text x="340" y="179" text-anchor="middle" font-size="10" fill="#94A3B8" letter-spacing="1.5">③ 자동화 파이프라인</text>
+
+<!-- ── ROW 3: 자동화 ── -->
+<!-- DB Webhook (amber) -->
+<rect x="10" y="183" width="162" height="56" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="91" y="203" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#633806">Database Webhook</text>
+<text x="91" y="221" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#854F0B">INSERT 자동 트리거</text>
+
+<line x1="174" y1="211" x2="206" y2="211" stroke="#854F0B" stroke-width="1" marker-end="url(#arr-amber)"/>
+
+<!-- Edge Function (amber) -->
+<rect x="208" y="183" width="214" height="56" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+<text x="315" y="203" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#633806">Edge Function</text>
+<text x="315" y="221" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#854F0B">append-workbook-row</text>
+
+<line x1="424" y1="211" x2="456" y2="211" stroke="#854F0B" stroke-width="1" marker-end="url(#arr-amber)"/>
+
+<!-- Storage (green) -->
+<rect x="458" y="183" width="212" height="56" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+<text x="564" y="203" text-anchor="middle" dominant-baseline="central" font-size="13" font-weight="600" fill="#27500A">Storage</text>
+<text x="564" y="221" text-anchor="middle" dominant-baseline="central" font-size="11" fill="#3B6D11">xlsx 누적 파일 자동 갱신</text>
+
+<!-- 범례 -->
+<text x="10" y="258" font-size="10" fill="#94A3B8">범례</text>
+<line x1="40" y1="258" x2="78" y2="258" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="82" y="258" font-size="10" fill="#94A3B8">자동 트리거</text>
+<line x1="148" y1="258" x2="186" y2="258" stroke="#64748B" stroke-width="1" marker-end="url(#arr)"/>
+<text x="190" y="258" font-size="10" fill="#94A3B8">데이터 흐름</text>
+
+</svg>
+  </div>
+
+  <!-- 보충 설명 -->
+  <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+    <div style="padding:12px 14px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
+      <div style="font-size:10px;font-weight:700;color:#0D9488;letter-spacing:1px;margin-bottom:6px">① 배포</div>
+      <div style="font-size:11px;color:#475569;line-height:1.6">코드를 GitHub에 Push하면 Actions가 자동으로 빌드하고 GitHub Pages에 올립니다.</div>
+    </div>
+    <div style="padding:12px 14px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
+      <div style="font-size:10px;font-weight:700;color:#3B82F6;letter-spacing:1px;margin-bottom:6px">② 서비스</div>
+      <div style="font-size:11px;color:#475569;line-height:1.6">입주민은 신청 화면에서 검증 후 옵션을 선택합니다. 관리자는 별도 화면에서 신청 내역을 관리합니다.</div>
+    </div>
+    <div style="padding:12px 14px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0">
+      <div style="font-size:10px;font-weight:700;color:#F59E0B;letter-spacing:1px;margin-bottom:6px">③ 자동화</div>
+      <div style="font-size:11px;color:#475569;line-height:1.6">신청이 DB에 저장될 때마다 Webhook이 Edge Function을 호출해 엑셀 파일에 자동으로 행을 추가합니다.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════
+     PAGE 4 : 코딩 파이프라인
+════════════════════════════════ -->
+<div class="page pipeline">
+  <div class="pipe-header">
+    <div class="pipe-title">코딩 파이프라인</div>
+    <div class="pipe-sub">요구사항 → Cursor AI → 코드 생성 → 테스트 → 배포 — 개발 전체 흐름</div>
+  </div>
+
+  <div class="pipe-section-label first">① 개발 사이클 — 에러가 나면 Cursor로 돌아온다</div>
+
+  <div class="pipe-svg-wrap">
+<svg width="100%" viewBox="0 0 680 210"
+  xmlns="http://www.w3.org/2000/svg" role="img"
+  style="font-family:'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif">
+<title>코딩 파이프라인</title>
+<desc>요구사항 파악부터 GitHub Pages 배포까지의 개발 흐름</desc>
+<defs>
+  <marker id="ca" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="ca-r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <marker id="ca-g" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="#0F6E56" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+</defs>
+
+<!-- ── 에러 루프 경로 (위) ── -->
+<path d="M634,50 L654,50 L654,8 L248,8 L248,24"
+  fill="none" stroke="#FCA5A5" stroke-width="1.2" stroke-dasharray="5 3"
+  marker-end="url(#ca-r)"/>
+<rect x="360" y="2" width="168" height="16" rx="3" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="0.5"/>
+<text x="444" y="10" text-anchor="middle" dominant-baseline="central"
+  font-size="10" font-weight="600" fill="#DC2626">에러 발생 → 에러 메시지 복사 → Cursor로</text>
+
+<!-- ── ROW 1: 개발 사이클 (y=24-76) ── -->
+
+<!-- Box1: 요구사항 파악 (gray) -->
+<rect x="20" y="24" width="140" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="90" y="42" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#2C2C2A">요구사항 파악</text>
+<text x="90" y="58" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5F5E5A">무엇을 만들지 정리</text>
+
+<line x1="162" y1="50" x2="176" y2="50" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box2: Cursor AI (purple — 핵심!) -->
+<rect x="178" y="24" width="140" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.5"/>
+<text x="248" y="40" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="700" fill="#3C3489">Cursor AI</text>
+<text x="248" y="56" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#534AB7">🎯 프롬프트 붙여넣기</text>
+
+<line x1="320" y1="50" x2="334" y2="50" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box3: 코드 생성 (blue) -->
+<rect x="336" y="24" width="140" height="52" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="406" y="42" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#0C447C">코드 생성·적용</text>
+<text x="406" y="58" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#185FA5">Apply 클릭 → 파일 반영</text>
+
+<line x1="478" y1="50" x2="492" y2="50" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box4: 로컬 테스트 (teal) -->
+<rect x="494" y="24" width="140" height="52" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="564" y="42" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#085041">로컬 테스트</text>
+<text x="564" y="58" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#0F6E56">npm run dev → 브라우저 확인</text>
+
+<!-- ── 성공 경로 (아래) ── -->
+<path d="M564,76 L564,104 L90,104 L90,128"
+  fill="none" stroke="#0F6E56" stroke-width="1.2"
+  marker-end="url(#ca-g)"/>
+<rect x="244" y="98" width="152" height="16" rx="3" fill="#F0FDF4" stroke="#86EFAC" stroke-width="0.5"/>
+<text x="320" y="106" text-anchor="middle" dominant-baseline="central"
+  font-size="10" font-weight="600" fill="#15803D">✅ 완성 → 배포 파이프라인으로</text>
+
+<!-- ── ROW 2: 배포 파이프라인 (y=128-180) ── -->
+
+<!-- Box1: Git Commit (gray) -->
+<rect x="20" y="128" width="140" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="90" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#2C2C2A">Git Commit</text>
+<text x="90" y="162" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5F5E5A">변경사항 저장 · 메시지 입력</text>
+
+<line x1="162" y1="154" x2="176" y2="154" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box2: GitHub Push (gray) -->
+<rect x="178" y="128" width="140" height="52" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="248" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#2C2C2A">GitHub Push</text>
+<text x="248" y="162" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#5F5E5A">클라우드에 업로드</text>
+
+<line x1="320" y1="154" x2="334" y2="154" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box3: GitHub Actions (blue) -->
+<rect x="336" y="128" width="140" height="52" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="406" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#0C447C">GitHub Actions</text>
+<text x="406" y="162" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#185FA5">빌드 자동 실행</text>
+
+<line x1="478" y1="154" x2="492" y2="154" stroke="#64748B" stroke-width="1" marker-end="url(#ca)"/>
+
+<!-- Box4: GitHub Pages (green) -->
+<rect x="494" y="128" width="140" height="52" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+<text x="564" y="146" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="600" fill="#27500A">GitHub Pages 배포</text>
+<text x="564" y="162" text-anchor="middle" dominant-baseline="central" font-size="10" fill="#3B6D11">🌐 실제 인터넷 주소 반영</text>
+
+<!-- 루프 설명 레이블 -->
+<text x="20" y="200" font-size="10" fill="#64748B">※ 에러가 나도 괜찮습니다.</text>
+<text x="20" y="212" font-size="10" fill="#64748B">에러 메시지를 Cursor 채팅에 붙여넣으면 AI가 자동으로 고쳐줍니다.</text>
+
+</svg>
+  </div>
+
+  <!-- 핵심 원칙 카드 -->
+  <div style="margin-top:16px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div style="padding:12px 14px;background:#F8F5FF;border-radius:8px;border:1px solid #DDD6FE">
+      <div style="font-size:10px;font-weight:700;color:#534AB7;margin-bottom:5px">Cursor AI</div>
+      <div style="font-size:11px;color:#4C1D95;line-height:1.5">코드를 이해할 필요 없습니다. 🎯 박스 프롬프트를 그대로 복사해 붙여넣기만 하세요.</div>
+    </div>
+    <div style="padding:12px 14px;background:#F0FDF4;border-radius:8px;border:1px solid #86EFAC">
+      <div style="font-size:10px;font-weight:700;color:#15803D;margin-bottom:5px">에러가 나면</div>
+      <div style="font-size:11px;color:#166534;line-height:1.5">에러 메시지를 Cursor 채팅에 그대로 붙여넣고 "고쳐줘"라고 하면 됩니다.</div>
+    </div>
+    <div style="padding:12px 14px;background:#EFF6FF;border-radius:8px;border:1px solid #BFDBFE">
+      <div style="font-size:10px;font-weight:700;color:#1D4ED8;margin-bottom:5px">배포 자동화</div>
+      <div style="font-size:11px;color:#1E3A5F;line-height:1.5">Push 한 번이면 GitHub Actions가 알아서 빌드하고 배포합니다. 별도 작업 없음.</div>
+    </div>
+    <div style="padding:12px 14px;background:#F0FDF4;border-radius:8px;border:1px solid #BBF7D0">
+      <div style="font-size:10px;font-weight:700;color:#0F6E56;margin-bottom:5px">완성 기준</div>
+      <div style="font-size:11px;color:#064E3B;line-height:1.5">브라우저에서 직접 눌러봤을 때 의도대로 동작하면 그 장은 완성입니다.</div>
+    </div>
+  </div>
+
+  <!-- 장별 연결 요약 -->
+  <div style="margin-top:16px;padding:14px 18px;background:#FAFAFA;border-radius:8px;border:1px solid #E2E8F0">
+    <div style="font-size:11px;font-weight:700;color:#1E293B;margin-bottom:8px">챕터별 코딩 파이프라인 연결</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-size:11px;color:#475569;line-height:1.6">
+      <div><span style="font-weight:600;color:#0F172A">0~3장</span> — 환경 세팅 + 첫 배포 (파이프라인 뼈대 완성)</div>
+      <div><span style="font-weight:600;color:#0F172A">4~12장</span> — 기능 구현 (Cursor 사이클 반복)</div>
+      <div><span style="font-weight:600;color:#0F172A">13~20장</span> — 관리자·보안·운영 (마무리)</div>
+    </div>
+  </div>
+</div>
+</div>
+
