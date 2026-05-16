@@ -175,10 +175,36 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .cmp-lbl.base{background:#f1f5f9;color:#64748b}
 .cmp-lbl.sel{background:#fef3c7;color:#92400e}
 .cmp-imgs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0}
-.cmp-img{padding:.75rem;text-align:center}
+/* 붙박이장·공간특화 등 2열 비교 — 드레스룸 카드와 동일 프레임으로 통일 */
+.cmp-imgs .cmp-img{
+  padding:.75rem;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#fafbfc;
+  box-sizing:border-box;
+}
 .cmp-img+.cmp-img{border-left:1px solid #e2e8f0}
-.cmp-img img{width:100%;border-radius:.375rem}
+.cmp-imgs .cmp-img img{
+  width:100%;
+  height:17.5rem;
+  max-height:17.5rem;
+  object-fit:contain;
+  object-position:center;
+  border-radius:.375rem;
+  display:block;
+}
 .img-ph{background:#f8fafc;border:1.5px dashed #d1d5db;border-radius:.375rem;padding:1.25rem .5rem;color:#b0b8c4;font-size:.75rem}
+.cmp-imgs .img-ph{
+  width:100%;
+  height:17.5rem;
+  min-height:17.5rem;
+  max-height:17.5rem;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
 .cmp-cols{display:grid;grid-template-columns:1fr 1fr}
 .cmp-col{padding:.75rem 1rem}
 .cmp-col+.cmp-col{border-left:1px solid #e2e8f0}
@@ -269,6 +295,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   .header-bar{flex-direction:column;gap:.25rem;text-align:center}
   .cmp-cols,.cmp-imgs,.cmp-labels{grid-template-columns:1fr}
   .cmp-col+.cmp-col,.cmp-img+.cmp-img{border-left:none;border-top:1px solid #e2e8f0}
+  .cmp-imgs .cmp-img img,.cmp-imgs .img-ph{height:13rem;max-height:13rem;min-height:13rem}
   .app-head{display:none}
   .app-sub{grid-template-columns:1fr;gap:.25rem}
   .admin-filters{grid-template-columns:1fr}
