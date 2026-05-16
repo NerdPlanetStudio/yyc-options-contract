@@ -584,7 +584,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .yyc-notice-btn:hover{background:#2c5282}
 @media print{
   /* A4 가로 — 계약서 2단 레이아웃·인쇄 미리보기 모두 가로 형식에 맞춤 */
-  @page{size:A4 landscape;margin:8mm}
+  @page{size:A4 landscape;margin:6mm}
   html,body{
     width:100%!important;
     height:auto!important;
@@ -619,16 +619,10 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
     overflow:visible!important;
     margin:0!important;
     padding:0!important;
-    zoom:0.78;
+    /* 한 장(afp)당 세로 여유 확보 — 값이 크면 한 면이 여러 용지로 쪼개짐 */
+    zoom:0.72;
     -webkit-print-color-adjust:economy;
     print-color-adjust:economy
-  }
-  html.yyc-print-source-page .app-form-print > .afp:last-child,
-  html:has(.app-form-print) .app-form-print > .afp:last-child{
-    page-break-after:auto!important;
-    break-after:auto!important;
-    margin-bottom:0!important;
-    padding-bottom:0!important
   }
   html.yyc-print-source-page .container,
   html:has(.app-form-print) .container{
@@ -637,9 +631,28 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
     padding:0!important;
     margin:0!important
   }
-  html.yyc-print-source-page .afp,
+  /* 각 afp = PDF 1면 — 면 안에서 쪼개지지 않도록, 1·2면 사이에만 넘김 */
+  html.yyc-print-source-page .app-form-print > .afp,
+  html:has(.app-form-print) .app-form-print > .afp{
+    width:100%!important;
+    max-width:100%!important;
+    min-height:0!important;
+    padding:5mm!important;
+    gap:3mm!important;
+    box-sizing:border-box!important;
+    page-break-after:always!important;
+    break-after:page!important;
+    page-break-inside:avoid!important;
+    break-inside:avoid!important;
+  }
+  html.yyc-print-source-page .app-form-print > .afp:last-child,
+  html:has(.app-form-print) .app-form-print > .afp:last-child{
+    page-break-after:auto!important;
+    break-after:auto!important;
+    margin-bottom:0!important;
+    padding-bottom:0!important
+  }
   html.yyc-print-source-page .app-form-page,
-  html:has(.app-form-print) .afp,
   html:has(.app-form-print) .app-form-page{
     width:100%!important;
     max-width:100%!important;
@@ -658,9 +671,11 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   html.yyc-print-source-page .af-hdr-sub,
   html:has(.app-form-print) .af-hdr-sub{font-size:9pt!important}
   html.yyc-print-source-page .af-fp img,
-  html:has(.app-form-print) .af-fp img{max-height:42mm!important}
+  html:has(.app-form-print) .af-fp img{max-height:36mm!important}
   html.yyc-print-source-page .af-at-img,
-  html:has(.app-form-print) .af-at-img{max-height:32mm!important}
+  html:has(.app-form-print) .af-at-img{max-height:28mm!important}
+  html.yyc-print-source-page .aft img,
+  html:has(.app-form-print) .aft img{max-height:30mm!important;object-fit:contain!important}
   html.yyc-print-source-page .aft th,
   html.yyc-print-source-page .aft td,
   html:has(.app-form-print) .aft th,
