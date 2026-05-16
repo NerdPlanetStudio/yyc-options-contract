@@ -1696,7 +1696,7 @@ export function App() {
     allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];} catMap[o.cat].push(o); });
     return (
       <>
-      <div className="container">
+      <div className={'container'+(typeKey==='55A'||typeKey==='59A'?' option-page--cmp-no-upscale':'')}>
         <header className="header-bar">
           <span className="header-info">{typeData.name} | {dong}동 {ho}호 | {contractor}</span>
           <span className="header-total">합계: {fmt(total)}</span>
