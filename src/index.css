@@ -175,15 +175,14 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .cmp-lbl.base{background:#f1f5f9;color:#64748b}
 .cmp-lbl.sel{background:#fef3c7;color:#92400e}
 .cmp-imgs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0}
-/* 2열 비교 — 이미지 바깥(레터박스)은 라벨과 동일 톤(흰색 박스 제거) */
+/* 2열 비교 — 기본: 동일 높이 + cover */
 .cmp-imgs .cmp-img{
   padding:0;
   display:block;
+  background:#fff;
   overflow:hidden;
   box-sizing:border-box;
 }
-.cmp-imgs .cmp-img:first-child{background:#f1f5f9}
-.cmp-imgs .cmp-img:last-child{background:#fef3c7}
 .cmp-img+.cmp-img{border-left:1px solid #e2e8f0}
 .cmp-imgs .cmp-img img{
   width:100%;
@@ -205,22 +204,23 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   align-items:center;
   justify-content:center;
 }
-/* 55㎡A·59㎡A·옵션 카드(.cmp-card)만: 도면 업스케일 방지. 가전(app-table) 2열 비교는 기본 cover 유지 */
-.option-page--cmp-no-upscale .cmp-card .cmp-imgs .cmp-img{
+/* 55㎡A·59㎡A만: 저해상도 도면 업스케일 방지(contain), 여백은 라벨톤 */
+.option-page--cmp-no-upscale .cmp-imgs .cmp-img{
   padding:.5rem;
   display:flex;
   align-items:center;
   justify-content:center;
+  background:#f1f5f9;
   min-height:12rem;
 }
-.option-page--cmp-no-upscale .cmp-card .cmp-imgs .cmp-img img{
+.option-page--cmp-no-upscale .cmp-imgs .cmp-img img{
   max-width:100%;
   max-height:15.5rem;
   width:auto;
   height:auto;
   object-fit:contain;
 }
-.option-page--cmp-no-upscale .cmp-card .cmp-imgs .img-ph{
+.option-page--cmp-no-upscale .cmp-imgs .img-ph{
   width:calc(100% - 1rem);
   height:auto;
   min-height:10rem;
@@ -318,15 +318,15 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   .cmp-cols,.cmp-imgs,.cmp-labels{grid-template-columns:1fr}
   .cmp-col+.cmp-col,.cmp-img+.cmp-img{border-left:none;border-top:1px solid #e2e8f0}
   .cmp-imgs .cmp-img img,.cmp-imgs .img-ph{height:13rem;max-height:13rem;min-height:13rem}
-  .option-page--cmp-no-upscale .cmp-card .cmp-imgs .cmp-img{min-height:10rem;padding:.375rem}
-  .option-page--cmp-no-upscale .cmp-card .cmp-imgs .cmp-img img{
+  .option-page--cmp-no-upscale .cmp-imgs .cmp-img{min-height:10rem;padding:.375rem}
+  .option-page--cmp-no-upscale .cmp-imgs .cmp-img img{
     height:auto;
     min-height:0;
     max-height:11.5rem;
     width:auto;
     object-fit:contain;
   }
-  .option-page--cmp-no-upscale .cmp-card .cmp-imgs .img-ph{
+  .option-page--cmp-no-upscale .cmp-imgs .img-ph{
     height:auto;
     min-height:8rem;
     max-height:11.5rem;
