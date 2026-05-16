@@ -1641,6 +1641,16 @@ export function App() {
   if (step === 1) {
     const cats = []; const catMap = {};
     allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];cats.push(o.cat);} catMap[o.cat].push(o); });
+    const livingCat = '거실마감재 특화';
+    const bathCat = '욕실마감재 특화';
+    const li = cats.indexOf(livingCat);
+    const bi = cats.indexOf(bathCat);
+    if (li !== -1 && bi !== -1 && bi !== li + 1) {
+      const reordered = cats.filter((c) => c !== bathCat);
+      reordered.splice(reordered.indexOf(livingCat) + 1, 0, bathCat);
+      cats.length = 0;
+      cats.push(...reordered);
+    }
     return (
       <>
       <div className="container">
@@ -1693,15 +1703,17 @@ export function App() {
                   </div>
                 );
               }
-              const hasImg = ['주방 마감 및 가구 특화','붙박이장','공간(드레스룸) 특화'].includes(cat);
+              const isImgCategory = ['주방 마감 및 가구 특화','붙박이장','공간(드레스룸) 특화'].includes(cat);
               const catOpts = catMap[cat];
               const imgOpt = catOpts.find(o => o.baseImg || o.img) || catOpts[0];
+              /* 이미지 URL이 있을 때만 2열 비교 — 55A 주방 등은 플레이스홀더 없이 텍스트만 */
+              const showCmpImgs = isImgCategory && (imgOpt.baseImg || imgOpt.img);
               return (
                 <div key={cat} className="cat-section">
                   <div className="cmp-card">
                     <div className="cmp-head">▣ {cat} 옵션 선택</div>
                     <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                    {hasImg && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
+                    {showCmpImgs && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
                     {catOpts.map(opt => {
                       const isOn = sel[opt.id] !== undefined;
                       const isExcl = opt.group && allOpts.some(o => o.group===opt.group && o.id!==opt.id && sel[o.id]!==undefined);
