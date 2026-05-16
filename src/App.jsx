@@ -1094,6 +1094,52 @@ async function downloadApplicationsXlsx(rows) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
+const OPT_CAT_LIVING = '거실마감재 특화';
+const OPT_CAT_BATH = '욕실마감재 특화';
+/** optionsCatalog opts 순서의 카테고리 목록 — 옵션 신청 카드와 동일하게 욕실을 거실 직후로 */
+function getOrderedOptionCategories(opts) {
+  if (!opts?.length) return [];
+  const cats = [];
+  const seen = new Set();
+  for (const o of opts) {
+    if (!seen.has(o.cat)) {
+      seen.add(o.cat);
+      cats.push(o.cat);
+    }
+  }
+  const li = cats.indexOf(OPT_CAT_LIVING);
+  const bi = cats.indexOf(OPT_CAT_BATH);
+  if (li !== -1 && bi !== -1 && bi !== li + 1) {
+    const rest = cats.filter((c) => c !== OPT_CAT_BATH);
+    rest.splice(rest.indexOf(OPT_CAT_LIVING) + 1, 0, OPT_CAT_BATH);
+    return rest;
+  }
+  return cats;
+}
+
+/** 선택 항목을 옵션 카드(및 계약서 텍스트 블록) 순서와 동일하게 정렬 — 가전은 항상 맨 마지막 */
+function orderedSelectedList(typeData, allOpts, sel) {
+  if (!typeData) return [];
+  const order = getOrderedOptionCategories(typeData.opts);
+  const byCat = new Map();
+  for (const o of allOpts) {
+    if (!byCat.has(o.cat)) byCat.set(o.cat, []);
+    byCat.get(o.cat).push(o);
+  }
+  const out = [];
+  for (const cat of order) {
+    for (const o of byCat.get(cat) || []) {
+      if (sel[o.id] !== undefined) out.push(o);
+    }
+  }
+  for (const o of byCat.get('가전 옵션') || []) {
+    if (sel[o.id] !== undefined) out.push(o);
+  }
+  return out;
+}
+
+const PRINT_TEXT_OPTION_CATS = new Set(['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화']);
+
 /** PDF 신청서 2면 인쇄 양식 — typeData(평형 카탈로그) 기준으로 55A·59A 등 공통 */
 function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho }) {
   if(!typeData) return null;
@@ -1161,9 +1207,11 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
       </React.Fragment>
     );
   };
-  const w=typeData.opts.find(o=>o.id==='wall');
-  const l=typeData.opts.find(o=>o.id==='living');
-  const b=typeData.opts.find(o=>o.id==='bath');
+  const orderedCats = getOrderedOptionCategories(typeData.opts);
+  const p1TextOpts = orderedCats
+    .filter((cat) => PRINT_TEXT_OPTION_CATS.has(cat))
+    .map((cat) => typeData.opts.find((o) => o.cat === cat))
+    .filter(Boolean);
   const k=typeData.opts.find(o=>o.id==='kitchen');
   const closets = typeData.opts.filter((o) => o.cat === "붙박이장");
   const sp = typeData.opts.find((o) => o.id === "space");
@@ -1220,9 +1268,9 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
             <div className="af-hdr-info"><div className="af-hdr-cell">{dong||'___'}동</div><div className="af-hdr-cell">{ho||'___'}호</div></div>
           </div>
           {typeData.floorPlan&&<div className="af-fp"><img src={typeData.floorPlan} alt="평면도"/></div>}
-          {w&&<TextOpt opt={w}/>}
-          {l&&<TextOpt opt={l}/>}
-          {b&&<TextOpt opt={b}/>}
+          {p1TextOpts.map((opt) => (
+            <TextOpt key={opt.id} opt={opt} />
+          ))}
         </div>
       </div>
       <div className="afp afp-2">
@@ -1468,7 +1516,7 @@ export function App() {
     if (!signData || submitting || !typeData) return;
     setSubmitResult(null);
     setSubmitting(true);
-    const list = allOpts.filter((o) => sel[o.id] !== undefined);
+    const list = orderedSelectedList(typeData, allOpts, sel);
     const sum = Object.values(sel).reduce((s, v) => s + v, 0);
     try {
       const receiptNo = await fetchNextReceiptNoFromSupabase();
@@ -1516,7 +1564,10 @@ export function App() {
   };
 
   const resetType = (key) => { setTypeKey(key); setSel({}); };
-  const selectedList = allOpts.filter(o => sel[o.id] !== undefined);
+  const selectedList = useMemo(
+    () => orderedSelectedList(typeData, allOpts, sel),
+    [typeData, allOpts, sel]
+  );
 
   const tryEnterOptionsFromGate = useCallback(async () => {
     if (!typeKey) {
@@ -1639,18 +1690,10 @@ export function App() {
   }
 
   if (step === 1) {
-    const cats = []; const catMap = {};
-    allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];cats.push(o.cat);} catMap[o.cat].push(o); });
-    const livingCat = '거실마감재 특화';
-    const bathCat = '욕실마감재 특화';
-    const li = cats.indexOf(livingCat);
-    const bi = cats.indexOf(bathCat);
-    if (li !== -1 && bi !== -1 && bi !== li + 1) {
-      const reordered = cats.filter((c) => c !== bathCat);
-      reordered.splice(reordered.indexOf(livingCat) + 1, 0, bathCat);
-      cats.length = 0;
-      cats.push(...reordered);
-    }
+    const cats = getOrderedOptionCategories(typeData.opts);
+    if (allOpts.some((o) => o.cat === '가전 옵션')) cats.push('가전 옵션');
+    const catMap = {};
+    allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];} catMap[o.cat].push(o); });
     return (
       <>
       <div className="container">

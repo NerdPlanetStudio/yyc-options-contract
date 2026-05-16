@@ -175,13 +175,12 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .cmp-lbl.base{background:#f1f5f9;color:#64748b}
 .cmp-lbl.sel{background:#fef3c7;color:#92400e}
 .cmp-imgs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0}
-/* 붙박이장·공간특화 등 2열 비교 — 드레스룸 카드와 동일 프레임으로 통일 */
+/* 2열 비교 — 동일 높이, cover로 contain 레터박스(양옆 흰 여백) 제거 */
 .cmp-imgs .cmp-img{
-  padding:.75rem;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:#fafbfc;
+  padding:0;
+  display:block;
+  background:#fff;
+  overflow:hidden;
   box-sizing:border-box;
 }
 .cmp-img+.cmp-img{border-left:1px solid #e2e8f0}
@@ -189,14 +188,14 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   width:100%;
   height:17.5rem;
   max-height:17.5rem;
-  object-fit:contain;
+  object-fit:cover;
   object-position:center;
-  border-radius:.375rem;
   display:block;
 }
 .img-ph{background:#f8fafc;border:1.5px dashed #d1d5db;border-radius:.375rem;padding:1.25rem .5rem;color:#b0b8c4;font-size:.75rem}
 .cmp-imgs .img-ph{
-  width:100%;
+  margin:.375rem;
+  width:calc(100% - 0.75rem);
   height:17.5rem;
   min-height:17.5rem;
   max-height:17.5rem;
