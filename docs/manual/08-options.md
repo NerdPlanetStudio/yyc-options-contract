@@ -375,8 +375,10 @@ npm run images:normalize
 | `npm error ENOENT package.json` | 홈 폴더(`~`)에서 `npm run dev` 실행 | `cd /Users/dongwoolim/yyc-options` 후 다시 실행 |
 | 평면도 깨진 아이콘 🖼 | URL 오타 / Imgur 삭제 | 브라우저 새 탭에 URL 붙여 넣어 그림이 뜨는지 확인 |
 | 옵션 카드에 그림 칸 없음 | `baseImg`·`img` 둘 다 없음 | PDF에 그림 없으면 정상. 있으면 8-9대로 추가 |
-| 주방만 글자, 그림 없음 | 카테고리명이 `주방 마감 특화` (가구 없음) | 2열 그림은 **`주방 마감 및 가구 특화`** 등에만 표시 |
-| 평면도만 너무 작고 여백 많음 | PDF 캡처 여백이 큼 | 8-8에서 도면을 더 타이트하게 다시 캡처 |
+| 주방만 글자, 그림 없음 | `baseImg`/`img` 없음 또는 카테고리가 3종 외 | URL 추가 · cat 이름 `주방 마감 및 가구 특화` 등 확인 |
+| 2열은 있는데 여백이 큼 | PDF 캡처 여백 | 8-8 타이트 캡처 · `CatalogImage` trim 동작 확인 |
+| Imgur는 뜨는데 trim 안 됨 | CORS | 원본 표시도 OK · 필요 시 `images:normalize` |
+| 평면도만 너무 작음 | 캡처 여백 | 8-8 재캡처 |
 | 배포 후에도 옛 그림 | 캐시 / Actions 미완료 | 시크릿 창 + Actions 초록 ✅ 확인 후 재접속 |
 
 ---

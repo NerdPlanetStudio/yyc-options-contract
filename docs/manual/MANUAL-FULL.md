@@ -2231,6 +2231,17 @@ import { CatalogImage } from "./CatalogImage.jsx";
 > 기존 10·11장 제출·서명 흐름은 유지. Apply.
 > ```
 
+### 8-3-1. `CatalogImage` 가 하는 일 (이미 구현됨)
+
+| 구분 | 동작 |
+|------|------|
+| **평면도·주방/붙박이/공간 비교** | `CatalogImage` → 브라우저에서 이미지 로드 → 외곽 밝은색 여백 잘라내기 → `#fff` 패딩 후 표시 |
+| **냉장고** (`fridgeBaseImg` / `fridgeImg`) | Imgur ID 4종은 **trim 안 함** — 원본 URL 그대로 `<img>` |
+| **2열 칸이 안 나오는 경우** | `App.jsx` 는 `주방 마감 및 가구 특화` · `붙박이장` · `공간(드레스룸) 특화` 만 2열 UI. **`baseImg`/`img` 둘 다 없으면** 글자만 (55A 주방 등 — 정상) |
+| **표시 크기** | 픽셀 맞출 필요 없음 — `index.css` 의 `.plan-box` · `.cmp-card .cmp-imgs` 가 맞춤 |
+
+> Imgur CORS 때문에 trim 이 안 되면 **원본 URL** 그대로 보입니다. 그림은 뜨면 OK.
+
 ---
 
 ## 8-4. 브라우저 확인 (`step === 1`)
@@ -2300,7 +2311,7 @@ npm run dev
 | **`floorPlan`** | "맨 위 큰 평면도 주소" |
 | **`baseImg` / `img`** | "왼쪽(미선택형) / 오른쪽(선택형) 비교 그림 주소" |
 | **Imgur** | "그림을 인터넷에 올려 두고 링크만 받는 무료 사진 창고" |
-| **표시 크기** | "주소만 맞으면 됨 — 화면 크기는 CSS가 맞춤 (타입마다 픽셀 맞출 필요 없음)" |
+| **표시 크기** | URL만 맞으면 됨 — `CatalogImage` + CSS가 여백·높이 통일 (타입별 픽셀 작업 불필요) |
 
 ### 8-7-2. 어떤 그림을 어디에 넣나
 
@@ -2428,7 +2439,8 @@ npm run dev
 
 1. **맨 위** 흰 카드 안에 평면도가 보인다 (잘리지 않고, 좌우 회색 띠 없음).
 2. **주방 마감 및 가구 특화 / 붙박이장 / 공간(드레스룸) 특화** 카드에 **왼쪽·오른쪽** 그림 2칸이 보인다.
-3. **가전(냉장고)** 는 맨 아래 — 평면도·주방 비교 그림만 `CatalogImage` 로 여백 정리 (냉장고는 원본 그대로, 정상).
+3. **가전(냉장고)** 맨 아래 — 냉장고만 trim 제외(원본), 평면도·2열 비교는 `CatalogImage` 처리.
+4. **55A** 등 `baseImg` 없는 주방 카드는 **2열 칸 없이** 텍스트만 — URL 없으면 정상.
 
 [스크린샷: 평면도 + 2열 옵션 비교 + 냉장고 구역]
 
@@ -2442,18 +2454,24 @@ npm run dev
 
 각 타입마다: `floorPlan` 있음 → 비교 그림 필요한 카테고리만 `baseImg`/`img` 있음.
 
-### (3) 선택: 그림 파일을 프로젝트에 박아 두기 (고급)
+### (3) 선택: 로컬 파일로 일괄 정규화 (고급)
 
-인터넷(Imgur) 대신 **내 서버에 파일**로 두고 싶을 때만:
+Imgur 대신 **GitHub Pages `/images/catalog/`** 로 두고 싶을 때:
 
 ```bash
 cd /Users/dongwoolim/yyc-options
+npm install          # sharp 포함 (최초 1회)
 npm run images:normalize
 ```
 
-- 냉장고 URL은 **자동 제외**됩니다.
-- `public/images/catalog/` 에 저장되고, `optionsCatalog.js` 주소가 바뀝니다.
-- **Imgur에서 받기 실패**하면 이 명령은 안 됩니다. 그때는 8-8~8-9(Imgur)만 쓰면 됩니다.
+| 항목 | 내용 |
+|------|------|
+| 대상 | `optionsCatalog.js` 안 Imgur URL (냉장고 4 ID **제외**) |
+| 결과 | `public/images/catalog/*.png` 생성 + 카탈로그 URL 치환 |
+| 실패 시 | 네트워크/Imgur 차단 환경에서는 0건 처리 — **8-8~8-9 Imgur 방식 유지** (브라우저 `CatalogImage` 만으로도 운영 가능) |
+| 배포 | 치환 후 `git push` → 16장 Pages |
+
+> **MVP 권장**: Imgur URL만 넣고 push. `images:normalize` 는 선택.
 
 ---
 
@@ -2464,8 +2482,10 @@ npm run images:normalize
 | `npm error ENOENT package.json` | 홈 폴더(`~`)에서 `npm run dev` 실행 | `cd /Users/dongwoolim/yyc-options` 후 다시 실행 |
 | 평면도 깨진 아이콘 🖼 | URL 오타 / Imgur 삭제 | 브라우저 새 탭에 URL 붙여 넣어 그림이 뜨는지 확인 |
 | 옵션 카드에 그림 칸 없음 | `baseImg`·`img` 둘 다 없음 | PDF에 그림 없으면 정상. 있으면 8-9대로 추가 |
-| 주방만 글자, 그림 없음 | 카테고리명이 `주방 마감 특화` (가구 없음) | 2열 그림은 **`주방 마감 및 가구 특화`** 등에만 표시 |
-| 평면도만 너무 작고 여백 많음 | PDF 캡처 여백이 큼 | 8-8에서 도면을 더 타이트하게 다시 캡처 |
+| 주방만 글자, 그림 없음 | `baseImg`/`img` 없음 또는 카테고리가 3종 외 | URL 추가 · cat 이름 `주방 마감 및 가구 특화` 등 확인 |
+| 2열은 있는데 여백이 큼 | PDF 캡처 여백 | 8-8 타이트 캡처 · `CatalogImage` trim 동작 확인 |
+| Imgur는 뜨는데 trim 안 됨 | CORS | 원본 표시도 OK · 필요 시 `images:normalize` |
+| 평면도만 너무 작음 | 캡처 여백 | 8-8 재캡처 |
 | 배포 후에도 옛 그림 | 캐시 / Actions 미완료 | 시크릿 창 + Actions 초록 ✅ 확인 후 재접속 |
 
 ---
