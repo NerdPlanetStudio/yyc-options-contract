@@ -1,10 +1,12 @@
-# 7장. "다음" 누르면 진짜 입주민인지 확인하기
+# 7장. 입주민 검증 + 옵션 화면으로 들어가기 (`step 0` → `step 1`)
 
 > **이 장에서 완성하는 것**  
-> 6장에서 만든 **다음** 버튼이 일하게 됩니다.  
-> 누르면 5장에서 만든 **`verify_yyc_resident`** 함수가 돌고,  
-> 통과면 → 다음 화면(평형 표시),  
-> 실패면 → "등록되지 않은 정보입니다" 빨간 메시지.  
+> 6장 **`step 0`** 에서 **「옵션 계약 신청 →」**(또는 변경 신청)을 누르면:  
+> 1. Supabase **`verify_yyc_resident`** 로 동·호·이름·휴대폰 뒷4자리 확인  
+> 2. **선택한 평형(`typeKey`)** 이 등록부와 같으면 → **`setStep(1)`** (8장 옵션 화면)  
+> 3. 틀리면 → **팝업(모달)** 으로 안내 (빨간 글씨 한 줄이 아님)  
+>
+> 추가: 4칸을 입력하는 동안 **등록부와 맞는 평형 버튼이 자동으로 선택**될 수 있습니다.  
 >
 > **소요 시간**: 약 1.5시간  
 > **난이도**: ★★★ (Supabase ↔ 화면 첫 연결)
@@ -15,122 +17,141 @@
 
 | 용어 | 1줄 비유 |
 |------|---------|
-| **Supabase Client** | "내 사이트가 인터넷 엑셀에 전화 걸 때 쓰는 전화기" |
-| **rpc('함수명', { 인자 })** | "5장에서 만든 매크로를 이름으로 부르기" |
-| **async / await** | "전화 걸고 답 올 때까지 기다림" |
-| **try / catch** | "전화 끊기거나 에러 나면 잡아서 메시지 띄우기" |
+| **Supabase RPC** | "5장에서 만든 검색 매크로를 이름으로 부르기" |
+| **`verify_yyc_resident`** | "4가지 정보로 등록부 1줄 찾기" |
+| **`tryEnterOptionsFromGate`** | "신청 버튼 눌렀을 때 검증 후 step 1 로 보내는 함수" |
+| **`lookupResidentTypeQuiet`** | "입력할 때 조용히 평형만 맞춰 주는 자동완성" |
+| **`noticeModal`** | "틀렸을 때 뜨는 안내 팝업" |
+| **로컬 폴백 (`DEV`)** | "개발 PC에만 있는 샘플 등록부 JSON" |
 
 ---
 
-## 7-2. Supabase 전화기 설치
+## 7-2. Supabase 전화기 준비
 
-Cursor 터미널:
+### (1) 패키지 (이미 있으면 생략)
 
 ```bash
+cd /Users/dongwoolim/yyc-options
 npm install @supabase/supabase-js
 ```
 
-✅ 끝나면 빨간 글자 없이 새 줄.
+### (2) `.env.local` (로컬 개발용)
+
+프로젝트 루트에:
+
+```
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGc...본인키...
+```
+
+[스크린샷: .env.local 두 줄]
+
+⚠️ Git에 올리지 않기 (`.gitignore`에 `.env.local` 있는지 확인).  
+수정 후 **`npm run dev` 재시작** (Ctrl+C → 다시 실행).
+
+> 배포(GitHub Pages)는 **GitHub Secrets** 에 같은 이름으로 넣습니다 (16장).
 
 ---
 
-## 7-3. URL·열쇠 환경변수에 적기
+## 7-3. 5장 SQL이 돌아가 있는지 확인
 
-루트(`yyc-options/`)에 **`.env.local`** 파일을 만들고 4장에서 메모해 둔 값을 넣습니다.
+Supabase → **SQL Editor** → 5장에서 실행한  
+`supabase/sql/yyc_resident_registry.sql` + 세대 **INSERT** 가 되어 있어야 합니다.
 
-> Cursor 왼쪽 파일 트리 빈 곳 우클릭 → New File → `.env.local`
-
-```
-VITE_SUPABASE_URL=https://abcd1234.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGc...본인거...
-```
-
-[스크린샷: .env.local 파일에 두 줄]
-
-⚠️ **이 파일은 Git에 올라가면 안 됨.** Cursor가 자동으로 `.gitignore`에 넣어주지만, 직접 확인:
-
-`.gitignore` 안에 `.env.local` 한 줄이 있는지 보고 없으면 추가.
-
-> 💡 **수정한 .env.local 은 `npm run dev` 다시 켜야 적용됨.** Ctrl+C → 다시 `npm run dev`.
+✅ Table Editor → `yyc_resident_registry` 에 테스트 행이 보임.
 
 ---
 
-## 7-4. AI에게 "다음 버튼 일 시키기" 🎯
+## 7-4. AI에게 검증 + `step 1` 이동 붙이기 🎯
 
 > 🎯 **Cursor에 그대로 복사**  
 > ```
-> @App.jsx 에 다음 변경을 적용해줘.
+> @App.jsx @optionsCatalog.js
 >
-> 1) 파일 맨 위에 Supabase 클라이언트 1개 만들기
->    - import { createClient } from '@supabase/supabase-js'
->    - const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY)
+> 1) verify_yyc_resident 호출 (REST rpc 또는 supabase.rpc):
+>    p_dong, p_ho, p_contractor, p_phone_tail — 동·호는 숫자만, 이름 trim
 >
-> 2) 상태 추가
->    - const [loading, setLoading] = useState(false)
->    - const [errorMsg, setErrorMsg] = useState('')
->    - const [verifiedTypeKey, setVerifiedTypeKey] = useState('')
+> 2) async function tryEnterOptionsFromGate:
+>    - !typeKey 이면 noticeModal "평형 선택"
+>    - gateVerifying true
+>    - verifyResidentForGate(...) → { typeKey } 또는 null
+>    - null: noticeModal "등록 정보 불일치"
+>    - row.typeKey !== typeKey: noticeModal "평형 확인" (등록 평형 이름 표시)
+>    - 통과: setStep(1)
+>    - finally gateVerifying false
 >
-> 3) 다음 버튼 onClick 동작:
->    - setLoading(true), setErrorMsg('')
->    - 입력값 정규화: 동·호는 숫자만, 이름은 trim·연속공백 1칸, 휴대폰은 숫자 4자리
->    - supabase.rpc('verify_yyc_resident', {
->        p_dong: 동, p_ho: 호, p_contractor: 이름, p_phone_tail: 뒤4
->      })
->    - 결과 data가 1줄 이상이면 setVerifiedTypeKey(data[0].type_key)
->    - 0줄이면 setErrorMsg('등록되지 않은 정보입니다. 동·호·계약자명·휴대폰 뒤 4자리를 다시 확인해 주세요.')
->    - error 가 있으면 setErrorMsg('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
->    - finally setLoading(false)
+> 3) step===0 의 「옵션 계약 신청 →」「옵션 계약 변경 신청 →」 onClick = tryEnterOptionsFromGate
+>    disabled: gateVerifying || !dong || !ho || !contractor || phoneLast4.length!==4 || !typeKey
+>    텍스트: gateVerifying ? "확인 중…" : 기본 문구
 >
-> 4) 화면 추가:
->    - 다음 버튼 위에 errorMsg 가 있으면 빨간 글씨로 보이기
->    - loading 중이면 다음 버튼 텍스트가 "확인 중..." 으로
->    - verifiedTypeKey 가 채워지면 카드 아래 초록 박스로
->      "확인 완료 — 평형: {verifiedTypeKey}" 표시 (다음 장에서 진짜 화면으로 교체)
+> 4) useEffect (step===0): 4칸 다 차면 lookupResidentTypeQuiet → typeKey 자동 설정 (바뀌면 setSel({}))
 >
-> 변경 후 Apply.
+> 5) noticeModal: 제목+본문+확인 버튼 (alertdialog)
+>
+> DEV: RPC 빈 결과일 때 allowedResidents.sample.json 폴백 허용.
+> Apply.
 > ```
 
 ---
 
 ## 7-5. 브라우저에서 확인
 
-새로고침 → 4칸 입력 → **다음** 클릭.
+```bash
+cd /Users/dongwoolim/yyc-options
+npm run dev
+```
 
-| 입력 | 기대 결과 |
-|------|----------|
-| 등록부에 있는 사람 (예: 101 / 1504 / 임동우 / 5604) | 초록 박스 "확인 완료 — 평형: 59A" |
-| 한 칸이라도 틀림 | 빨간 글씨 "등록되지 않은 정보입니다" |
-| 휴대폰에 3자리만 | 다음 버튼 회색 (6장에서 막아둠) |
-| 인터넷 끄고 시도 | 빨간 글씨 "일시적인 오류…" |
+| 시험 | 입력·동작 | 기대 결과 |
+|------|-----------|----------|
+| **자동 평형** | 등록부와 맞는 4칸 입력 | 0.4초 안에 해당 **평형 버튼이 파란색** |
+| **통과** | 맞는 4칸 + 맞는 평형 → **옵션 계약 신청 →** | **옵션 화면** (`step 1`) — 평면도·카드·오른쪽 합계 |
+| **4항목 불일치** | 이름·휴대폰 등 하나 틀림 | 팝업 **「등록 정보 불일치」** |
+| **평형만 틀림** | 4칸 맞고 다른 평형 버튼 선택 후 신청 | 팝업 **「평형 확인」** — 등록 평형 이름 안내 |
+| **확인 중** | 신청 클릭 직후 | 버튼 **「확인 중…」** |
+| **4칸 미완** | 휴대폰 3자리 | 신청 버튼 **회색** |
 
-[스크린샷: 통과 — 초록 박스 / 실패 — 빨간 글씨 두 컷]
+[스크린샷: 통과 — step1 헤더바 / 실패 — 등록 정보 불일치 팝업]
 
-✅ 두 경우 다 동작하면 7장 통과.
+✅ 통과 시 **8장 옵션 화면**까지 보이면 7장 완료.
 
 ---
 
-## 7-6. 자주 나는 에러
+## 7-6. 로컬만 테스트할 때 (등록부 JSON)
+
+공개 Git에는 실명 DB를 안 올립니다. 개발 PC에만:
+
+1. `src/data/allowedResidents.json` (또는 샘플 복사)
+2. 터미널: `npm run db:residents-sql` → 나온 SQL을 Supabase에서 실행  
+   **또는** DEV 모드에서 샘플 JSON 폴백으로만 확인
+
+> 운영(실제 입주)은 **Supabase 등록부만** 신뢰합니다.
+
+---
+
+## 7-7. 자주 나는 에러
 
 | 화면 | 원인 | 해결 |
 |------|------|------|
-| Console에 `Invalid API key` | `.env.local` 키 오타 | 4장에서 다시 복사. dev 서버 재시작 |
-| `function verify_yyc_resident does not exist` | 5장 SQL 안 돌렸음 | SQL Editor 다시 Run |
-| 항상 "등록되지 않은…" | 입력값에 공백/한자 | 정규화 코드 들어갔는지 확인. 등록부 데이터도 확인 |
-| CORS 에러 | URL 끝에 `/` 붙임 | `.env.local`의 URL은 `.co` 까지만 |
-| 환경변수 undefined | dev 안 껐다 켰음 | Ctrl+C → `npm run dev` |
+| `Invalid API key` | `.env.local` 오타 | 4장 키 다시 복사, dev 재시작 |
+| `verify_yyc_resident does not exist` | 5장 SQL 미실행 | `yyc_resident_registry.sql` 전체 Run |
+| 항상 등록 불일치 | DB에 행 없음 / 뒷4자리 다름 | Table Editor 데이터 확인 |
+| 평형 확인 팝업 | `typeKey` 수동 선택이 등록과 다름 | 안내된 평형 버튼으로 다시 선택 |
+| CORS / Failed to fetch | URL·네트워크 | URL 끝 `/` 없음, Supabase 상태 확인 |
+| 자동 평형이 안 맞음 | RPC 실패·빈 결과 | 5장 SQL·INSERT, DEV면 JSON 폴백 |
+| 팝업만 뜨고 step1 안 감 | `setStep(1)` 누락 | 7-4 프롬프트 다시 Apply |
 
 ---
 
-## 7-7. 7장 완료 체크리스트
+## 7-8. 7장 완료 체크리스트
 
-- [ ] `.env.local` 에 URL·anon key 들어 있다
-- [ ] `.gitignore`에 `.env.local` 들어 있다
-- [ ] 통과 케이스 → 초록 박스 + 평형 표시
-- [ ] 실패 케이스 → 빨간 메시지
-- [ ] 통신 중 → 버튼이 "확인 중…"
-- [ ] Console에 키 노출되는 에러 없음
+- [ ] `.env.local` (로컬) 또는 GitHub Secrets (배포) 설정
+- [ ] 등록부에 있는 4칸 → **옵션 계약 신청 →** → **`step 1`** 진입
+- [ ] 틀린 4칸 → **등록 정보 불일치** 팝업
+- [ ] 평형만 틀림 → **평형 확인** 팝업
+- [ ] 확인 중 **「확인 중…」** 표시
+- [ ] (선택) 4칸 입력 시 평형 버튼 **자동 선택**
 
 ---
 
 📌 **다음 장 미리보기**  
-8장에선 그 평형(`type_key`)에 맞는 **옵션 화면**을 띄웁니다. 옵션 카드 + 가격 + 합계까지.
+8장: `step 1` 에서 **`optionsCatalog.js`** 기준 옵션 카드·가격·합계·이미지(8-7절)를 다룹니다.

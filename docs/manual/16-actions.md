@@ -1,106 +1,101 @@
 # 16장. GitHub Actions로 자동 배포 (Push만 하면 끝)
 
 > **이 장에서 완성하는 것**  
-> 코드를 `git push` 하면 → **자동으로 빌드 → GitHub Pages 갱신**.  
-> 환경변수(VITE_SUPABASE_URL 등)도 GitHub 비밀 저장소에 안전하게.  
+> `main` 에 `git push` → **자동 빌드 → GitHub Pages 갱신**.  
+> Supabase URL·anon 키는 **GitHub Secrets** 로 주입 (본인 프로젝트용).  
 >
-> **소요 시간**: 약 1.5시간  
+> **선행**: 3장 Pages **Source = GitHub Actions**, 2장 push 가능 상태  
+> **소요 시간**: 약 1시간 (워크플로는 레포에 이미 있음)  
 > **난이도**: ★★★
 
 ---
 
-## 16-1. 미리 알아두기 (1줄 비유)
+## 16-1. 미리 알아두기
 
-| 용어 | 1줄 비유 |
-|------|---------|
-| **GitHub Actions** | "GitHub가 무료로 빌려주는 자동화 알바" |
-| **워크플로우 (workflow)** | "알바한테 시킬 일 목록 (yml 한 장)" |
-| **Secret / Variable** | "공개 안 되는 비밀 메모 / 그냥 메모" |
-| **Job / Step** | "큰 단위 일 / 그 안의 작은 단계" |
-| **gh-pages** | "빌드 결과 폴더를 인터넷 주소로 띄워주는 GitHub 기능" |
+| 용어 | 설명 |
+|------|------|
+| **GitHub Actions** | push 시 Ubuntu에서 `npm ci` → `npm run build` → Pages 배포 |
+| **`pages.yml`** | `.github/workflows/pages.yml` — 정본 |
+| **Secret** | `VITE_SUPABASE_*` — 빌드 시에만 주입, 로그에는 마스킹 |
+| **`VITE_BASE`** | `/저장소이름/` — CI가 **레포 이름**으로 자동 설정 |
 
----
-
-## 16-2. GitHub Pages 모드를 "Actions" 로 바꾸기
-
-3장에서 "Deploy from a branch" 로 했다면 한 번만 바꿉니다.
-
-### (1) GitHub 리포 → **Settings → Pages**
-### (2) **Source** 드롭다운에서 **GitHub Actions** 선택
-
-[스크린샷: Pages 설정 — Source: GitHub Actions]
-
-→ Save (자동 저장될 수도 있음).
+3장에서 워크플로를 처음 만들었다면, 16장은 **Secrets 등록 + 본인 Supabase 연결 + 배포 확인**에 집중합니다.
 
 ---
 
-## 16-3. 비밀값 GitHub에 등록 (Secrets)
+## 16-2. Pages Source 확인
 
-`.env.local` 의 두 줄을 GitHub에도 알려줘야 합니다.
+**Settings → Pages → Build and deployment**
 
-### (1) Settings → **Secrets and variables → Actions**
-### (2) **New repository secret** 두 번
+| 항목 | 값 |
+|------|-----|
+| Source | **GitHub Actions** (Deploy from a branch 아님) |
 
-| Name | Secret |
+---
+
+## 16-3. GitHub Secrets 등록
+
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Name | Value |
 |------|--------|
 | `VITE_SUPABASE_URL` | `https://abcd1234.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | `eyJhbGc...본인거...` |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API → **anon public** |
 
-[스크린샷: Actions secrets 화면 — 두 줄 등록됨]
+로컬 `.env.local` 과 **이름을 똑같이** 맞춥니다 (`.env.example` 참고).
 
-> ⚠️ **service_role 키, Supabase DB 비밀번호, WORKBOOK_WEBHOOK_SECRET 같은 건 여기 절대 넣지 마세요.** 프런트 빌드는 anon 키만 알면 됩니다.
+> ⚠️ **넣지 말 것**: `service_role`, DB 비밀번호, `WORKBOOK_WEBHOOK_SECRET`, `VITE_WORKBOOK_APPEND_SECRET`  
+> Webhook·Edge 비밀은 **Supabase secrets** 만.  
+> `VITE_*` 는 빌드 후 브라우저에 노출되므로 **anon 키만**.
 
----
-
-## 16-4. AI에게 워크플로우 만들라고 시키기 🎯
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> 프로젝트 루트에 .github/workflows/pages.yml 파일을 만들어줘.
->
-> 요구사항:
-> - main 브랜치에 push 되면 트리거
-> - workflow_dispatch (수동 실행)도 가능
-> - permissions: contents:read, pages:write, id-token:write
-> - jobs:
->   1) build:
->      - actions/checkout@v4
->      - actions/setup-node@v4 (node-version 20, cache: 'npm')
->      - npm ci
->      - npm run build
->        env:
->          VITE_SUPABASE_URL:      ${{ secrets.VITE_SUPABASE_URL }}
->          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
->          VITE_BASE: "/yyc-options/"
->      - 빌드 후 dist 폴더에 .nojekyll 빈 파일 생성
->      - actions/upload-pages-artifact@v3 (path: ./dist)
->   2) deploy:
->      - needs: build
->      - environment: name: github-pages, url: ${{ steps.deployment.outputs.page_url }}
->      - actions/deploy-pages@v4 (id: deployment)
->
-> 그리고 vite.config.js 가 base 옵션을 import.meta.env.BASE_URL 또는
-> process.env.VITE_BASE 를 쓰게 되어 있는지 확인하고, 안 되어 있으면 그렇게 수정.
->
-> 변경 후 Apply.
-> ```
+Secret 을 안 넣으면 앱이 코드 **기본 Supabase** 로 동작할 수 있습니다. 운영·교육용은 **반드시 본인 프로젝트 Secret** 을 넣으세요.
 
 ---
 
-## 16-5. push 후 자동 배포 확인
+## 16-4. 워크플로 (레포에 이미 있음)
 
-### (1) 평소처럼 commit + push
-- Cursor 사이드바 나뭇가지 → Message: `actions 자동 배포` → ✓ → Sync.
+경로: **`.github/workflows/pages.yml`**
 
-### (2) GitHub 리포 → **Actions** 탭
-- 방금 push 워크플로우가 노란 점 → 초록 체크로 변하는지 확인.
+요약 (3장과 다른 점):
 
-[스크린샷: Actions 탭 — build / deploy 둘 다 ✅]
+| 항목 | 현재 레포 |
+|------|-----------|
+| 트리거 | `push` → `main`, `workflow_dispatch` |
+| Node | **22** |
+| Job | **`deploy` 1개** (build·deploy 분리 아님) |
+| `VITE_BASE` | `/${{ github.event.repository.name }}/` → 레포명이 `yyc-options` 면 `/yyc-options/` |
+| Supabase | `npm run build` 의 `env` 에 Secret 2개 |
+| 배포 | `configure-pages` → `upload-pages-artifact` → `deploy-pages` |
 
-### (3) 인터넷 주소 새로고침
-- `https://내아이디.github.io/yyc-options/` 에 변경 사항 반영됨.
+`vite.config.js` 는 `process.env.VITE_BASE` 를 `base` 로 사용합니다.
 
-✅ Push만으로 자동 반영되면 16장 통과.
+`public/.nojekyll` 이 있으면 `dist` 에 복사되어 Jekyll 무시에 도움이 됩니다.
+
+### (선택) 15장 템플릿 xlsx 를 Pages 로 서빙
+
+`public/templates/yyc-contract-pivot-template.xlsx` 를 commit 하면:
+
+`https://내아이디.github.io/yyc-options/templates/yyc-contract-pivot-template.xlsx`
+
+→ Supabase `TEMPLATE_PUBLIC_URL` · 15장 초기화에 사용 (12장 피벗 헤더와 동일).
+
+---
+
+## 16-5. push 후 확인
+
+```bash
+cd /경로/yyc-options
+git add .
+git commit -m "배포 확인"
+git push origin main
+```
+
+1. GitHub → **Actions** → **Deploy GitHub Pages** → ✅  
+2. 주소: `https://내아이디.github.io/저장소이름/`  
+3. **신청 화면** (`/`) 동작  
+4. **관리자** `https://…/저장소이름/#/admin` (13장)
+
+Secret 을 바꾼 뒤에는 Actions에서 **Re-run all jobs** 한 번.
 
 ---
 
@@ -108,33 +103,34 @@
 
 | 화면 | 원인 | 해결 |
 |------|------|------|
-| Actions 빨간 X — `npm ci` 실패 | `package-lock.json` 누락 | 로컬에서 `npm install` 후 lock 파일 commit |
-| 사이트가 흰 화면 | base 경로 잘못 | `vite.config.js` 에 `base: '/yyc-options/'` |
-| 404 on assets | `.nojekyll` 누락 | yml 의 ".nojekyll 생성" 단계 확인 |
-| "Get Pages site failed" | Pages 모드 Branch로 남아있음 | 16-2 다시 |
-| `secrets.VITE_SUPABASE_URL` 비어 있음 | 16-3 안 함 | secret 등록 후 "Re-run workflow" |
-| 빌드는 되는데 anon key 없음 | secret 이름 오타 | yml의 env 이름과 secret 이름 1:1 |
+| `npm ci` 실패 | lock 없음 | 로컬 `npm install` 후 `package-lock.json` commit |
+| 흰 화면 | `base` 불일치 | Actions 로그의 `VITE_BASE` 와 주소 경로 (`/레포이름/`) |
+| 404 on `assets/…` | base·캐시 | hard refresh; `public/.nojekyll` 확인 |
+| Get Pages site failed | Source가 Branch | 16-2 GitHub Actions |
+| 빌드 OK인데 다른 DB | Secret 미등록 | 16-3 Secret 2개 + Re-run |
+| Secret 있는데 연결 실패 | URL·키 오타 | Supabase API 화면과 1:1 복사 |
+| `?admin=1` 안 됨 | 구버전 | **`#/admin`** (13장) |
 
 ---
 
-## 16-7. 16장 완료 체크리스트
+## 16-7. 완료 체크리스트
 
 - [ ] Pages Source = **GitHub Actions**
-- [ ] Repo Secrets 2개 등록 (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
-- [ ] `.github/workflows/pages.yml` 생성·push
-- [ ] Actions 탭에 ✅ 두 잡 (build, deploy)
-- [ ] 코드 수정 → push 만으로 사이트 자동 갱신
-- [ ] Actions 로그에 anon/service 키 "값" 이 노출 안 됨
+- [ ] Secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- [ ] `.github/workflows/pages.yml` 이 main 에 있음
+- [ ] Actions **Deploy GitHub Pages** ✅
+- [ ] Pages URL에서 신청·`#/admin` 확인
+- [ ] Actions 로그에 키 **값**이 그대로 찍히지 않음
 
 ---
 
 ## 16-8. 보안 메모
 
-- secret 은 **로그에 마스킹**되지만, `console.log(env)` 같은 건 절대 코드에 두지 말기.  
-- `VITE_*` 로 시작하는 건 **빌드 후 클라이언트에 그대로 박힘** = 누구나 볼 수 있음. 그래서 `anon` 키만 OK, `service_role` 은 절대 X.  
-- Webhook secret, DB 비번 등은 GitHub 가 아니라 **Supabase secrets** 에만 둡니다.
+- `console.log(import.meta.env)` 금지.  
+- `VITE_APPEND_WORKBOOK_ON_SUBMIT` + secret 은 GitHub에 넣지 말 것 (번들 노출). 12장은 **Database Webhook** 권장.  
+- Edge·DB 비밀은 Supabase secrets.
 
 ---
 
-📌 **다음 장 미리보기**  
-17장에서 **권한(RLS) + XSS** 를 한 번에 단단히 잠급니다. 마지막 보안 검수.
+📌 **다음 장**  
+17장: RLS·XSS 최종 잠금 (`#/admin` + `applications` REST).

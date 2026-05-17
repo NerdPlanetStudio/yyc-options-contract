@@ -840,7 +840,7 @@ li input[type="checkbox"] { margin-right: 4px; }
 <ul>
 <li><strong>6장.</strong> 동·호·이름·휴대폰 입력 칸 만들기 ★★★ 🏁</li>
 <li><strong>7장.</strong> &quot;다음&quot; 누르면 진짜 입주민인지 확인하기 ★★★</li>
-<li><strong>8장.</strong> 평형별 옵션 화면 만들기 ★★★</li>
+<li><strong>8장.</strong> 평형별 옵션 화면 만들기 + <strong>평면도·옵션 이미지 넣기(Imgur)</strong> ★★★</li>
 <li><strong>9장.</strong> 신청서 작성 폼 (개인정보 입력) ★★★</li>
 <li><strong>10장.</strong> 손가락·마우스 서명 칸 만들기 ★★★</li>
 <li><strong>11장.</strong> 신청 데이터 인터넷 엑셀(DB)에 진짜 저장 ★★★★</li>
@@ -2319,8 +2319,8 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...본인거...
 
 <hundefined id="undefined">[object Object]</hundefined>
 <blockquote>
-<p><strong>이 장에서 완성하는 것</strong><br>7장 통과 후 → 평형(예: <code>59A</code>)에 맞는 <strong>옵션 카드 목록</strong>이 나옵니다.<br>체크박스로 고르면 우측 합계가 실시간 갱신.  </p>
-<p><strong>소요 시간</strong>: 약 2시간<br><strong>난이도</strong>: ★★★</p>
+<p><strong>이 장에서 완성하는 것</strong><br>6·7장에서 만든 <strong>첫 화면(계약자 정보)</strong> 에서 입주민 확인이 끝나면 →<br><strong><code>step === 1</code> 옵션 화면</strong>으로 넘어가고, 평형(예: <code>59㎡A</code>)에 맞는 <strong>카테고리별 옵션 카드</strong>가 나옵니다.<br><strong>「선택」</strong> 버튼으로 고르면 <strong>오른쪽 사이드바 합계</strong>가 바로 바뀝니다.  </p>
+<p><strong>소요 시간</strong>: 약 2시간 (이미지 넣기는 8-7절 — 추가 1~2일)<br><strong>난이도</strong>: ★★★</p>
 </blockquote>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>
@@ -2332,100 +2332,213 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...본인거...
 </tr>
 </thead>
 <tbody><tr>
-<td><strong>옵션 카탈로그</strong></td>
-<td>&quot;평형별 메뉴판 (이 평형엔 이 옵션·이 가격)&quot;</td>
+<td><strong><code>src/optionsCatalog.js</code></strong></td>
+<td>&quot;19개 평형 <strong>메뉴판 + 가격 + 그림 주소</strong> 한 파일 (단일 소스)&quot;</td>
 </tr>
 <tr>
-<td><strong>JSON / JS 객체</strong></td>
-<td>&quot;엑셀의 한 행을 그대로 코드로 적은 메모&quot;</td>
+<td><strong><code>TYPES</code></strong></td>
+<td>&quot;메뉴판 묶음 배열 — 평형 1개 = 객체 1개&quot;</td>
 </tr>
 <tr>
-<td><strong>map / filter</strong></td>
-<td>&quot;엑셀 칼럼 변환·줄 골라내기&quot;</td>
+<td><strong><code>opts</code></strong></td>
+<td>&quot;그 평형의 마감·주방·붙박이·공간 옵션 줄 목록&quot;</td>
 </tr>
 <tr>
-<td><strong>합계 (reduce)</strong></td>
-<td>&quot;선택된 가격만 더하기 = SUMIF&quot;</td>
+<td><strong><code>getAppliances(t)</code></strong></td>
+<td>&quot;가전(인덕션·냉장고·비데 등) 목록 — 평형마다 <code>ac</code>·<code>vent</code>·<code>dual</code> 가격만 다름&quot;</td>
+</tr>
+<tr>
+<td><strong><code>step</code></strong></td>
+<td>&quot;지금 몇 번째 화면인지 번호 (0=입력, 1=옵션, 2=서명·제출)&quot;</td>
+</tr>
+<tr>
+<td><strong><code>sel</code></strong></td>
+<td>&quot;선택한 옵션 id → 가격 맵 (엑셀 SUMIF용 메모)&quot;</td>
+</tr>
+<tr>
+<td><strong><code>CatalogImage</code></strong></td>
+<td>&quot;평면도·비교 그림 여백을 흰색으로 맞춰 주는 표시 부품 (코드에 이미 있음)&quot;</td>
 </tr>
 </tbody></table>
-<hr>
 <hundefined id="undefined">[object Object]</hundefined>
-<p><code>src/optionsCatalog.js</code> 파일을 새로 만들어 <strong>그대로 복붙</strong>.</p>
-<pre><code class="language-js">export const OPTIONS_CATALOG = {
-  &#39;59A&#39;: [
-    { key: &#39;kitchen-up&#39;,   label: &#39;주방 상부장 업그레이드&#39;,  price: 1_200_000 },
-    { key: &#39;floor-grade2&#39;, label: &#39;바닥재 2등급&#39;,           price:   850_000 },
-    { key: &#39;window-blind&#39;, label: &#39;전체 창 전동블라인드&#39;,    price: 2_400_000 },
-    { key: &#39;pantry&#39;,       label: &#39;팬트리 추가&#39;,            price:   650_000 },
-  ],
-  &#39;52A&#39;: [
-    { key: &#39;kitchen-up&#39;,   label: &#39;주방 상부장 업그레이드&#39;,  price: 1_100_000 },
-    { key: &#39;floor-grade2&#39;, label: &#39;바닥재 2등급&#39;,           price:   780_000 },
-    { key: &#39;pantry&#39;,       label: &#39;팬트리 추가&#39;,            price:   620_000 },
-  ],
-  &#39;48B&#39;: [
-    { key: &#39;kitchen-up&#39;,   label: &#39;주방 상부장 업그레이드&#39;,  price: 1_000_000 },
-    { key: &#39;floor-grade2&#39;, label: &#39;바닥재 2등급&#39;,           price:   720_000 },
-  ],
-  &#39;65A&#39;: [
-    { key: &#39;kitchen-up&#39;,   label: &#39;주방 상부장 업그레이드&#39;,  price: 1_300_000 },
-    { key: &#39;window-blind&#39;, label: &#39;전체 창 전동블라인드&#39;,    price: 2_700_000 },
-    { key: &#39;pantry&#39;,       label: &#39;팬트리 추가&#39;,            price:   720_000 },
-    { key: &#39;wine&#39;,         label: &#39;와인셀러&#39;,               price: 1_900_000 },
-  ],
-  &#39;79&#39;:  [
-    { key: &#39;kitchen-up&#39;,   label: &#39;주방 상부장 업그레이드&#39;,  price: 1_500_000 },
-    { key: &#39;window-blind&#39;, label: &#39;전체 창 전동블라인드&#39;,    price: 3_100_000 },
-    { key: &#39;wine&#39;,         label: &#39;와인셀러&#39;,               price: 2_100_000 },
-    { key: &#39;aircon&#39;,       label: &#39;시스템 에어컨 1대 추가&#39;,  price: 2_800_000 },
-  ],
-};
-</code></pre>
+<table>
+<thead>
+<tr>
+<th>step</th>
+<th>화면</th>
+<th>하는 일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>0</strong></td>
+<td>계약자 정보 + 평형 버튼</td>
+<td>동·호·이름·휴대폰 4자리 → <strong>옵션 계약 신청 →</strong> (입주민 RPC 확인)</td>
+</tr>
+<tr>
+<td><strong>1</strong></td>
+<td>평면도 + 옵션 카드 + <strong>오른쪽 합계</strong></td>
+<td>카테고리별 <strong>선택</strong> 토글 → <strong>신청서 확인 →</strong></td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td>신청 요약 + 서명</td>
+<td>서명 후 제출 (10·11장과 연결)</td>
+</tr>
+</tbody></table>
 <blockquote>
-<p>💡 <strong>나중에 옵션·가격이 바뀌면 이 파일만 수정</strong>해서 push 하면 끝.</p>
+<p>💡 예전 교재의 <code>OPTIONS_CATALOG</code> 이름은 <strong>쓰지 않습니다.</strong> 지금은 <strong><code>TYPES</code> + <code>getAppliances</code></strong> 입니다.</p>
 </blockquote>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>
+<p>파일 위치: <strong><code>src/optionsCatalog.js</code></strong> (이미 있으면 <strong>열어서 가격·문구만 수정</strong>).</p>
+<hundefined id="undefined">[object Object]</hundefined>
+<pre><code class="language-js">export const TYPES = [
+  // ... 다른 평형 ...
+  {key:&#39;59A&#39;, name:&#39;59㎡A&#39;, opts:[
+    {id:&#39;wall&#39;, cat:&#39;벽 마감재 특화&#39;, label:&#39;벽(현관, 복도, 거실, 주방) 시트 판넬&#39;, base:&#39;실크 벽지&#39;, price:3400000},
+    {id:&#39;living&#39;, cat:&#39;거실마감재 특화&#39;, label:&#39;거실 아트월(...)&#39;, base:&#39;거실 아트월(...)&#39;, price:4200000, notes:[&#39;※ ...&#39;]},
+    {id:&#39;kitchen&#39;, cat:&#39;주방 마감 및 가구 특화&#39;, label:&#39;...&#39;, base:&#39;...&#39;, price:4500000,
+      baseImg:&#39;https://i.imgur.com/y8vaEXd.png&#39;, img:&#39;https://i.imgur.com/ukypmcj.png&#39;},
+    {id:&#39;closet_침실1&#39;, cat:&#39;붙박이장&#39;, label:&#39;...&#39;, base:&#39;&#39;, price:3900000, baseImg:&#39;...&#39;, img:&#39;...&#39;},
+    {id:&#39;space&#39;, cat:&#39;공간(드레스룸) 특화&#39;, label:&#39;...&#39;, base:&#39;&#39;, price:1200000,
+      baseImg:&#39;...&#39;, img:&#39;...&#39;, group:&#39;g59A&#39;},
+  ],
+  ac:6400000, vent:1200000, dual:true,
+  floorPlan:&#39;https://i.imgur.com/UW6y8Yf.png&#39;,
+  fridgeBaseImg:&#39;https://i.imgur.com/Wwqgatz.png&#39;,
+  fridgeImg:&#39;https://i.imgur.com/CUL8p92.png&#39;},
+];
+</code></pre>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>필수</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>id</code></td>
+<td>✅</td>
+<td>옵션 고유 이름 (영문·숫자, 예: <code>kitchen</code>)</td>
+</tr>
+<tr>
+<td><code>cat</code></td>
+<td>✅</td>
+<td>화면 카테고리 제목 (예: <code>거실마감재 특화</code>)</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>✅</td>
+<td>유상 선택형 설명 (긴 문장 OK)</td>
+</tr>
+<tr>
+<td><code>base</code></td>
+<td>✅</td>
+<td>미선택형 설명 (<code>&#39;&#39;</code> 가능)</td>
+</tr>
+<tr>
+<td><code>price</code></td>
+<td>✅</td>
+<td>숫자만 (따옴표 없음) <code>4500000</code></td>
+</tr>
+<tr>
+<td><code>notes</code></td>
+<td></td>
+<td>주의 문구 배열 <code>[&#39;※ ...&#39;, &#39;※ ...&#39;]</code></td>
+</tr>
+<tr>
+<td><code>baseImg</code> / <code>img</code></td>
+<td></td>
+<td>2열 비교 그림 URL (8-7절)</td>
+</tr>
+<tr>
+<td><code>group</code></td>
+<td></td>
+<td><strong>상호 배타</strong> — 같은 <code>group</code> 은 하나만 선택</td>
+</tr>
+</tbody></table>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ac</code></td>
+<td>시스템에어컨 가격 (가전 목록에 반영)</td>
+</tr>
+<tr>
+<td><code>vent</code></td>
+<td>환풍기 가격</td>
+</tr>
+<tr>
+<td><code>dual</code></td>
+<td><code>true</code> = 욕실 2개 타입(비데 2세트), <code>false</code> = 1세트</td>
+</tr>
+<tr>
+<td><code>floorPlan</code></td>
+<td>상단 평면도 URL</td>
+</tr>
+<tr>
+<td><code>fridgeBaseImg</code> / <code>fridgeImg</code></td>
+<td>냉장고 미선택/선택 그림</td>
+</tr>
+</tbody></table>
+<hundefined id="undefined">[object Object]</hundefined>
+<p><code>43</code>, <code>48A</code>, <code>48B</code>, <code>52A</code>, <code>52B</code>, <code>52C</code>, <code>55A</code>, <code>55B</code>,<br><code>59A</code>, <code>59B</code>, <code>59C</code>, <code>59D</code>, <code>59E</code>, <code>59F</code>, <code>65A</code>, <code>65B</code>, <code>68</code>, <code>79</code>, <code>84</code></p>
 <blockquote>
-<p>🎯 <strong>Cursor에 그대로 복사</strong>  </p>
-<pre><code>@App.jsx 에 다음을 추가/변경.
-
-1) 위에 import { OPTIONS_CATALOG } from &#39;./optionsCatalog&#39;
-
-2) 상태:
-   - const [step, setStep] = useState(&#39;verify&#39;)   // &#39;verify&#39; | &#39;options&#39; | &#39;form&#39; | &#39;done&#39;
-   - const [selected, setSelected] = useState({}) // { key: true } 형태
-
-3) 7장의 검증 통과 시 setStep(&#39;options&#39;) 호출. (verifiedTypeKey 도 그대로 유지)
-
-4) step === &#39;options&#39; 일 때 화면:
-   - 상단: &quot;동 ○○○호 ○○○ 님 — 평형 {verifiedTypeKey}&quot; (수정 버튼: setStep(&#39;verify&#39;))
-   - 가운데: OPTIONS_CATALOG[verifiedTypeKey] 목록을 카드로 출력
-     각 카드: 좌측 체크박스 + 옵션명 + 우측 가격(천단위 콤마, 끝에 &quot;원&quot;)
-     체크 시 카드 보더가 파란색·옅은 파란 배경
-   - 하단(스크롤해도 따라오는 sticky bar):
-     &quot;선택 {n}개 / 합계 {amount}원&quot;  +  큰 &quot;신청서 작성&quot; 버튼
-     선택 0개면 신청서 작성 버튼 disabled
-     신청서 작성 클릭 시 setStep(&#39;form&#39;)
-
-5) OPTIONS_CATALOG[verifiedTypeKey] 가 비어있거나 undefined 면
-   &quot;이 평형은 옵션 대상이 아닙니다&quot; 안내.
-
-모바일에서도 sticky bar 가 화면 아래 붙도록 position: sticky bottom: 0.
-변경 후 Apply.
+<p>5장 등록부 <code>type_key</code> 와 <strong>철자까지 동일</strong>해야 자동 평형 선택이 맞습니다.</p>
+</blockquote>
+<hundefined id="undefined">[object Object]</hundefined>
+<p><code>opts</code> 에 넣지 않아도 됩니다. <code>App.jsx</code> 가 평형 객체 <code>t</code> 를 넘겨 <strong>인덕션·오븐·냉장고·비데</strong> 등을 붙입니다.<br>가전 가격 중 <code>ac</code>, <code>vent</code> 는 평형 줄의 숫자를 씁니다.</p>
+<blockquote>
+<p>💡 <strong>옵션·가격·주의문·이미지 URL이 바뀌면</strong> 이 파일만 고치고 push 하면 신청 화면·관리자 엑셀 열이 같이 따라갑니다.</p>
+</blockquote>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<p><code>App.jsx</code> 상단에 아래가 있으면 <strong>8-3은 읽기만</strong> 하면 됩니다.</p>
+<pre><code class="language-js">import { TYPES, getAppliances } from &quot;./optionsCatalog.js&quot;;
+import { CatalogImage } from &quot;./CatalogImage.jsx&quot;;
+</code></pre>
+<blockquote>
+<p>🎯 <strong>처음부터 다시 붙일 때만</strong> Cursor에 복사  </p>
+<pre><code>@App.jsx @optionsCatalog.js
+- import { TYPES, getAppliances } from &#39;./optionsCatalog.js&#39;
+- step 0: 계약자 4칸 + TYPES 평형 버튼 + verify_yyc_resident 통과 시 setStep(1)
+- step 1: typeData = TYPES.find(t =&gt; t.key === typeKey)
+  - 상단 floorPlan (CatalogImage)
+  - getOrderedOptionCategories 로 PDF 순서대로 cat-section
+  - 마감 옵션: cmp-card + 선택 토글, baseImg/img 있으면 2열 그림
+  - 가전: app-table 맨 아래, 냉장고만 baseImg/img
+  - 오른쪽 sidebar: 선택 목록 + 합계 + 「신청서 확인 →」 setStep(2)
+- sel 상태: { [optionId]: price }
+- group 있는 옵션은 상호 배타(다른 선택 시 excluded 표시)
+기존 10·11장 제출·서명 흐름은 유지. Apply.
 </code></pre>
 </blockquote>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>
-<p>7장 통과 → 옵션 화면이 떠야 함.</p>
+<pre><code class="language-bash">cd /Users/dongwoolim/yyc-options
+npm run dev
+</code></pre>
+<p>등록부에 있는 <strong>테스트 동·호</strong>로 6장 입력 → <strong>옵션 계약 신청 →</strong> 클릭.</p>
+<p>✅ <strong>성공 화면</strong></p>
 <ol>
-<li>카드 체크/해제할 때 합계 즉시 변동</li>
-<li>다 해제하면 &quot;신청서 작성&quot; 회색</li>
-<li>위쪽 &quot;수정&quot; 누르면 다시 6장 입력 화면</li>
-<li>폰 화면(F12 모바일 모드)에서 sticky bar가 아래 붙어 있나</li>
+<li><strong>맨 위</strong> 평면도(또는 placeholder)</li>
+<li><strong>카테고리 제목</strong> (예: ▣ 거실마감재 특화 옵션 선택) — PDF 순서와 비슷</li>
+<li>각 줄 <strong>「선택」</strong> → 누르면 파란 테두리 + 오른쪽 <strong>선택 내역</strong>에 추가</li>
+<li><strong>가전 옵션</strong> 블록이 <strong>맨 아래</strong> (냉장고 2열 그림 포함 가능)</li>
+<li>오른쪽 <strong>합계</strong> 숫자가 선택할 때마다 즉시 변경</li>
+<li><strong>「신청서 확인 →」</strong> → 서명 화면(<code>step 2</code>)</li>
 </ol>
-<p>[스크린샷: 옵션 카드 + sticky 합계 바]</p>
-<p>✅ 다 OK면 8장 통과.</p>
+<p>[스크린샷: 평면도 + 옵션 카드 + 오른쪽 선택 내역·합계]</p>
+<blockquote>
+<p>선택을 <strong>0개</strong>로 둬도 <strong>「신청서 확인 →」</strong> 는 누를 수 있습니다 (전체 미선택형 신청).</p>
+</blockquote>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>
 <table>
@@ -2437,35 +2550,303 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...본인거...
 </tr>
 </thead>
 <tbody><tr>
-<td>옵션 화면이 빈 화면</td>
-<td>type_key 가 카탈로그에 없음</td>
-<td>5장 등록부 type_key 와 카탈로그 키 일치 확인</td>
+<td>평형 버튼이 안 눌림 / 다음 회색</td>
+<td>등록부 4항목 불일치</td>
+<td>5장 <code>type_key</code>·이름·휴대폰 뒷4자리 확인</td>
 </tr>
 <tr>
-<td>합계가 NaN</td>
-<td>price가 문자열</td>
-<td>카탈로그 가격을 숫자(number)로</td>
+<td>옵션 화면이 비어 있음</td>
+<td><code>typeKey</code> 가 <code>TYPES</code> 에 없음</td>
+<td><code>optionsCatalog.js</code> 의 <code>key</code> 와 등록부 일치</td>
 </tr>
 <tr>
-<td>모바일에서 sticky bar 안 붙음</td>
-<td>부모에 overflow: hidden</td>
-<td>App 컨테이너 overflow 제거</td>
+<td>합계가 <code>NaN</code></td>
+<td><code>price</code> 에 따옴표·쉼표</td>
+<td><code>price:4500000</code> 숫자만</td>
 </tr>
 <tr>
-<td>체크해도 색 변화 없음</td>
-<td>className 조건 누락</td>
-<td>&quot;체크 시 카드 클래스 &#39;selected&#39; 토글&quot; 추가 지시</td>
+<td>카테고리 순서가 PDF와 다름</td>
+<td><code>TYPE_OPTION_CARD_ORDER</code></td>
+<td><code>App.jsx</code> 해당 객체에 평형 키 추가·순서 수정</td>
+</tr>
+<tr>
+<td>붙박이·공간 둘 다 안 됨</td>
+<td><code>group</code> 상호 배타</td>
+<td>PDF 안내대로 하나만 선택 가능 (정상)</td>
+</tr>
+<tr>
+<td>2열 그림이 안 나옴</td>
+<td><code>cat</code> 이름 또는 URL 없음</td>
+<td><code>주방 마감 및 가구 특화</code> 등 + <code>baseImg</code>/<code>img</code> (8-7)</td>
+</tr>
+<tr>
+<td><code>npm ENOENT package.json</code></td>
+<td>홈(<code>~</code>)에서 npm 실행</td>
+<td><code>cd .../yyc-options</code> 후 실행</td>
 </tr>
 </tbody></table>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>
 <ul>
-<li><input disabled="" type="checkbox"> <code>optionsCatalog.js</code> 파일이 만들어졌고 본인 평형도 들어 있다</li>
-<li><input disabled="" type="checkbox"> 옵션 카드가 평형별로 다르게 나온다</li>
-<li><input disabled="" type="checkbox"> 체크 시 합계가 즉시 갱신</li>
-<li><input disabled="" type="checkbox"> 0개 선택 → &quot;신청서 작성&quot; 회색</li>
-<li><input disabled="" type="checkbox"> &quot;수정&quot; 누르면 입력 화면으로 복귀</li>
-<li><input disabled="" type="checkbox"> 모바일에서 합계 바가 아래 붙어 있다</li>
+<li><input disabled="" type="checkbox"> <code>src/optionsCatalog.js</code> 에 <strong>19개</strong> <code>key</code> 가 있다</li>
+<li><input disabled="" type="checkbox"> 등록부 <code>type_key</code> 와 카탈로그 <code>key</code> 가 같다</li>
+<li><input disabled="" type="checkbox"> <code>step 1</code> 에서 평형별 <strong>카테고리·옵션 문구</strong>가 다르게 보인다</li>
+<li><input disabled="" type="checkbox"> <strong>선택</strong> 토글 시 오른쪽 합계·선택 내역이 즉시 바뀐다</li>
+<li><input disabled="" type="checkbox"> <strong>신청서 확인 →</strong> 로 <code>step 2</code> (서명) 이동</li>
+<li><input disabled="" type="checkbox"> <strong>← 처음으로</strong> 로 <code>step 0</code> 복귀</li>
+<li><input disabled="" type="checkbox"> (선택) 8-7~8-12 로 평면도·비교 이미지 URL 입력 완료</li>
+</ul>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<blockquote>
+<p><strong>이 절에서 완성하는 것</strong><br>PDF 안내서에 있는 <strong>평면도</strong>, <strong>미선택형/선택형 비교 그림</strong>이 신청 화면에 보입니다.<br><strong>코드는 이미 들어 있습니다.</strong> 운영자가 할 일은 <strong>그림 파일 올리기 + URL 한 줄 붙이기</strong> 뿐입니다.  </p>
+<p><strong>소요 시간</strong>: 평형 1개당 약 10<del>20분 (19개 타입이면 하루</del>이틀 분량)<br><strong>난이도</strong>: ★★ (복붙 위주)</p>
+</blockquote>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>용어</th>
+<th>1줄 비유</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong><code>optionsCatalog.js</code></strong></td>
+<td>&quot;19개 평형 메뉴판 + 그림 주소록 <strong>한 파일</strong>&quot;</td>
+</tr>
+<tr>
+<td><strong><code>floorPlan</code></strong></td>
+<td>&quot;맨 위 큰 평면도 주소&quot;</td>
+</tr>
+<tr>
+<td><strong><code>baseImg</code> / <code>img</code></strong></td>
+<td>&quot;왼쪽(미선택형) / 오른쪽(선택형) 비교 그림 주소&quot;</td>
+</tr>
+<tr>
+<td><strong>Imgur</strong></td>
+<td>&quot;그림을 인터넷에 올려 두고 링크만 받는 무료 사진 창고&quot;</td>
+</tr>
+<tr>
+<td><strong>표시 크기</strong></td>
+<td>&quot;주소만 맞으면 됨 — 화면 크기는 CSS가 맞춤 (타입마다 픽셀 맞출 필요 없음)&quot;</td>
+</tr>
+</tbody></table>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>화면에 보이는 것</th>
+<th><code>optionsCatalog.js</code> 에 넣는 위치</th>
+<th>필수?</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>상단 <strong>평면도</strong></td>
+<td>해당 평형 <code>{ key:&#39;59A&#39;, ... floorPlan:&#39;https://...&#39; }</code></td>
+<td>✅ 타입마다 1장</td>
+</tr>
+<tr>
+<td><strong>주방·붙박이·공간</strong> 2열 비교</td>
+<td>해당 옵션 <code>{ ..., baseImg:&#39;...&#39;, img:&#39;...&#39; }</code></td>
+<td>PDF에 그림 있을 때만</td>
+</tr>
+<tr>
+<td><strong>냉장고</strong> 미선택/선택</td>
+<td><code>fridgeBaseImg</code>, <code>fridgeImg</code> (평형 줄 끝)</td>
+<td>가전 옵션 쓰는 타입만</td>
+</tr>
+<tr>
+<td>거실·욕실 등 <strong>텍스트만</strong> 옵션</td>
+<td><code>baseImg</code> 없음 → 그림 칸 안 나옴 (정상)</td>
+<td>—</td>
+</tr>
+</tbody></table>
+<blockquote>
+<p>💡 <strong>작업 순서 추천</strong>: ① 19개 타입 <code>floorPlan</code> 전부 → ② 주방/붙박이/공간 <code>baseImg</code>·<code>img</code> → ③ 냉장고(같은 URL 여러 타입 재사용 가능)</p>
+</blockquote>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<hundefined id="undefined">[object Object]</hundefined>
+<ol>
+<li>PDF 뷰어(미리보기·Adobe 등)에서 <strong>평면도 페이지</strong> 또는 <strong>옵션 비교 페이지</strong>를 연다.</li>
+<li><strong>Mac</strong>: <code>Command + Shift + 4</code> → 드래그해서 영역만 저장.<br><strong>Windows</strong>: <code>Win + Shift + S</code> → 영역 선택 → 저장.</li>
+<li>파일 이름 예: <code>59A-평면도.png</code>, <code>59A-주방-미선택.png</code></li>
+</ol>
+<p>[스크린샷: PDF 평면도 + 영역 캡처]</p>
+<p>✅ <strong>성공 화면</strong>: 바탕이 흰색에 가깝고, 도면·범례가 잘리지 않은 PNG 파일 1개가 바탕화면(또는 다운로드)에 생김.</p>
+<hundefined id="undefined">[object Object]</hundefined>
+<ol>
+<li>브라우저에서 <a href="https://imgur.com/upload">https://imgur.com/upload</a> 연다.</li>
+<li>방금 저장한 PNG를 <strong>끌어다 놓기</strong> (또는 &quot;New post&quot; → 파일 선택).</li>
+<li>업로드가 끝나면 그림 위에서 <strong>우클릭 → &quot;이미지 주소 복사&quot;</strong> (또는 &quot;Copy image address&quot;).</li>
+</ol>
+<p>✅ <strong>성공 화면</strong>: 클립보드에 아래처럼 <strong>https 로 시작</strong>하는 주소가 복사됨.</p>
+<pre><code class="language-text">https://i.imgur.com/xxxxxxxx.png
+</code></pre>
+<blockquote>
+<p>⚠️ <code>http://</code> 만 있거나, 페이지 주소(<code>imgur.com/a/...</code>)가 아니라 <strong>직접 그림 주소</strong>(<code>i.imgur.com/....png</code>) 인지 확인합니다.</p>
+</blockquote>
+<hundefined id="undefined">[object Object]</hundefined>
+<ul>
+<li>PDF 여백이 너무 크면 도면이 작아 보입니다. <strong>도면+범례만</strong> 최대한 타이트하게 캡처.</li>
+<li>회색 바탕 PDF는 사이트에서 <strong>흰 배경</strong>으로 맞춰 보이도록 이미 처리되어 있습니다. (냉장고 사진은 별도 규칙)</li>
+</ul>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<hundefined id="undefined">[object Object]</hundefined>
+<ol>
+<li>Cursor 왼쪽 파일 트리 → <strong><code>src/optionsCatalog.js</code></strong> 클릭.</li>
+<li><code>Command + F</code> 로 평형 키 검색 (예: <code>59A</code>).</li>
+</ol>
+<hundefined id="undefined">[object Object]</hundefined>
+<p>해당 평형 블록 <strong>맨 끝 쉼표 앞</strong>에 <code>floorPlan</code> 을 추가하거나 수정합니다.</p>
+<pre><code class="language-js">{key:&#39;59A&#39;, name:&#39;59㎡A&#39;, opts:[ /* ... */ ],
+  ac:6400000, vent:1200000, dual:true,
+  floorPlan:&#39;https://i.imgur.com/UW6y8Yf.png&#39;,
+  fridgeBaseImg:&#39;https://i.imgur.com/Wwqgatz.png&#39;,
+  fridgeImg:&#39;https://i.imgur.com/CUL8p92.png&#39;},
+</code></pre>
+<blockquote>
+<p>작은따옴표 <code>&#39;</code> 로 감싸고, 주소 끝에 <strong>쉼표</strong> 있는지 확인.</p>
+</blockquote>
+<hundefined id="undefined">[object Object]</hundefined>
+<p>PDF에 <strong>미선택형 / 선택형</strong> 그림이 있는 옵션만 넣습니다.</p>
+<pre><code class="language-js">{id:&#39;kitchen&#39;, cat:&#39;주방 마감 및 가구 특화&#39;, label:&#39;...&#39;, base:&#39;...&#39;, price:4500000,
+  baseImg:&#39;https://i.imgur.com/y8vaEXd.png&#39;,
+  img:&#39;https://i.imgur.com/ukypmcj.png&#39;,
+  notes:[ /* ... */ ]},
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>필드</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>baseImg</code></td>
+<td>왼쪽 칸 — <strong>기본 미선택형</strong> 그림</td>
+</tr>
+<tr>
+<td><code>img</code></td>
+<td>오른쪽 칸 — <strong>유상 선택형</strong> 그림</td>
+</tr>
+</tbody></table>
+<hundefined id="undefined">[object Object]</hundefined>
+<p>여러 평형이 <strong>같은 냉장고 사진</strong>을 쓰면 URL을 <strong>그대로 복사</strong>해 넣어도 됩니다.</p>
+<pre><code class="language-js">fridgeBaseImg:&#39;https://i.imgur.com/Wwqgatz.png&#39;,
+fridgeImg:&#39;https://i.imgur.com/CUL8p92.png&#39;,
+</code></pre>
+<hundefined id="undefined">[object Object]</hundefined>
+<ol>
+<li><code>Command + S</code> 저장.</li>
+<li>Cursor Source Control(왼쪽 가지 모양) → <strong>Commit</strong> → <strong>Push</strong> (2·3장에서 했던 것과 동일).</li>
+<li>GitHub Actions 배포가 끝난 뒤(16장) 사이트에서 확인.</li>
+</ol>
+<blockquote>
+<p>🎯 <strong>Cursor에 그대로 복사</strong> (한 타입 일괄 반영할 때)  </p>
+<pre><code>@optionsCatalog.js 에서 key가 &#39;52C&#39; 인 타입에 아래 URL을 넣어줘.
+- floorPlan: https://i.imgur.com/eSeJZFl.png
+- (해당 opts 중 space 옵션에) baseImg: ..., img: ...
+냉장고 URL은 건드리지 마. 문법(쉼표·따옴표) 깨지지 않게 Apply.
+</code></pre>
+</blockquote>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<hundefined id="undefined">[object Object]</hundefined>
+<p>터미널은 <strong>반드시 프로젝트 폴더</strong>에서 실행합니다.</p>
+<pre><code class="language-bash">cd /Users/dongwoolim/yyc-options
+npm run dev
+</code></pre>
+<p>브라우저에 나온 주소(보통 <code>http://localhost:5173</code>) → 입주민 검증 통과 → 해당 평형 선택.</p>
+<p>✅ <strong>성공 화면</strong></p>
+<ol>
+<li><strong>맨 위</strong> 흰 카드 안에 평면도가 보인다 (잘리지 않고, 좌우 회색 띠 없음).</li>
+<li><strong>주방 마감 및 가구 특화 / 붙박이장 / 공간(드레스룸) 특화</strong> 카드에 <strong>왼쪽·오른쪽</strong> 그림 2칸이 보인다.</li>
+<li><strong>가전(냉장고)</strong> 는 맨 아래 — 평면도·주방 비교 그림만 <code>CatalogImage</code> 로 여백 정리 (냉장고는 원본 그대로, 정상).</li>
+</ol>
+<p>[스크린샷: 평면도 + 2열 옵션 비교 + 냉장고 구역]</p>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>확인</th>
+<th>타입 키</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>☐</td>
+<td>43, 48A, 48B, 52A, 52B, 52C, 55A, 55B</td>
+</tr>
+<tr>
+<td>☐</td>
+<td>59A, 59B, 59C, 59D, 59E, 59F</td>
+</tr>
+<tr>
+<td>☐</td>
+<td>65A, 65B, 68, 79, 84</td>
+</tr>
+</tbody></table>
+<p>각 타입마다: <code>floorPlan</code> 있음 → 비교 그림 필요한 카테고리만 <code>baseImg</code>/<code>img</code> 있음.</p>
+<hundefined id="undefined">[object Object]</hundefined>
+<p>인터넷(Imgur) 대신 <strong>내 서버에 파일</strong>로 두고 싶을 때만:</p>
+<pre><code class="language-bash">cd /Users/dongwoolim/yyc-options
+npm run images:normalize
+</code></pre>
+<ul>
+<li>냉장고 URL은 <strong>자동 제외</strong>됩니다.</li>
+<li><code>public/images/catalog/</code> 에 저장되고, <code>optionsCatalog.js</code> 주소가 바뀝니다.</li>
+<li><strong>Imgur에서 받기 실패</strong>하면 이 명령은 안 됩니다. 그때는 8-8~8-9(Imgur)만 쓰면 됩니다.</li>
+</ul>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<table>
+<thead>
+<tr>
+<th>화면</th>
+<th>원인</th>
+<th>해결</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>npm error ENOENT package.json</code></td>
+<td>홈 폴더(<code>~</code>)에서 <code>npm run dev</code> 실행</td>
+<td><code>cd /Users/dongwoolim/yyc-options</code> 후 다시 실행</td>
+</tr>
+<tr>
+<td>평면도 깨진 아이콘 🖼</td>
+<td>URL 오타 / Imgur 삭제</td>
+<td>브라우저 새 탭에 URL 붙여 넣어 그림이 뜨는지 확인</td>
+</tr>
+<tr>
+<td>옵션 카드에 그림 칸 없음</td>
+<td><code>baseImg</code>·<code>img</code> 둘 다 없음</td>
+<td>PDF에 그림 없으면 정상. 있으면 8-9대로 추가</td>
+</tr>
+<tr>
+<td>주방만 글자, 그림 없음</td>
+<td>카테고리명이 <code>주방 마감 특화</code> (가구 없음)</td>
+<td>2열 그림은 <strong><code>주방 마감 및 가구 특화</code></strong> 등에만 표시</td>
+</tr>
+<tr>
+<td>평면도만 너무 작고 여백 많음</td>
+<td>PDF 캡처 여백이 큼</td>
+<td>8-8에서 도면을 더 타이트하게 다시 캡처</td>
+</tr>
+<tr>
+<td>배포 후에도 옛 그림</td>
+<td>캐시 / Actions 미완료</td>
+<td>시크릿 창 + Actions 초록 ✅ 확인 후 재접속</td>
+</tr>
+</tbody></table>
+<hr>
+<hundefined id="undefined">[object Object]</hundefined>
+<ul>
+<li><input disabled="" type="checkbox"> 19개 타입 모두 <code>floorPlan</code> URL 있음</li>
+<li><input disabled="" type="checkbox"> PDF에 있는 비교 그림은 <code>baseImg</code> / <code>img</code> 쌍으로 들어감</li>
+<li><input disabled="" type="checkbox"> Imgur 주소가 <code>https://i.imgur.com/xxxx.png</code> 형식</li>
+<li><input disabled="" type="checkbox"> 로컬 <code>npm run dev</code> 로 2~3개 타입(작은 평형·큰 평형·59A) 눈으로 확인</li>
+<li><input disabled="" type="checkbox"> Push 후 GitHub Pages에서도 동일하게 보임</li>
 </ul>
 <hr>
 <p>📌 <strong>다음 장 미리보기</strong><br>9장에선 &quot;신청서 작성&quot; 클릭 후의 <strong>개인정보 입력 폼</strong>(주민번호 앞6, 주소, 이메일, 비상연락처 등)을 만듭니다.</p>
@@ -4898,6 +5279,11 @@ JSX 출력 또는 escapeHtml 로 바꿔줘. 변경 후 Apply.
 <ul>
 <li><strong>원인</strong>: trim 미적용 또는 검증 조건 OR/AND 버그.  </li>
 <li><strong>해결</strong>: 4칸 모두 trim 후 비어있는지 확인. Cursor에 &quot;현재 활성 조건 디버그 출력 후 고쳐줘&quot;.</li>
+</ul>
+<hundefined id="undefined">[object Object]</hundefined>
+<ul>
+<li><strong>원인</strong>: Imgur URL 오타·삭제, 또는 <strong>홈 폴더에서</strong> <code>npm run dev</code> 실행.  </li>
+<li><strong>해결</strong>: 8장 <strong>8-8~8-11</strong> 절차. <code>cd .../yyc-options</code> 후 <code>npm run dev</code>. URL을 새 탭에 붙여 그림이 뜨는지 확인.</li>
 </ul>
 <hr>
 <hundefined id="undefined">[object Object]</hundefined>

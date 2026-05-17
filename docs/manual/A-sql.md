@@ -63,94 +63,47 @@ GRANT  EXECUTE ON FUNCTION public.verify_yyc_resident(text,text,text,text) TO an
 
 ---
 
-## A-2. 신청서 + 접수번호 카운터 + RPC (11장)
+## A-2. 신청서 + 접수번호 + 저장 RPC (11장)
+
+### (1) 테이블
+
+**빈 DB:** `supabase/sql/applications_create_table.sql` 전체 Run.
+
+**옛 스키마 DB:** `supabase/sql/applications_migrate_to_current_schema.sql` Run 후 (2) 실행.
+
+<details><summary>또는 아래 SQL 직접 붙여넣기</summary>
 
 ```sql
 CREATE TABLE IF NOT EXISTS public.applications (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  receipt_no text UNIQUE,
-  customer_name text NOT NULL,
+  receipt_no text UNIQUE NOT NULL,
+  customer_name text NOT NULL DEFAULT '미입력',
+  phone text NOT NULL DEFAULT '',
   dong text NOT NULL,
   ho text NOT NULL,
   unit_type text NOT NULL,
-  resident_id_first6 text NOT NULL CHECK (resident_id_first6 ~ '^[0-9]{6}$'),
-  phone text NOT NULL,
-  email text NOT NULL,
-  address text NOT NULL,
-  emergency_name text,
-  emergency_phone text,
-  options jsonb NOT NULL DEFAULT '[]'::jsonb,
-  total_amount integer NOT NULL DEFAULT 0,
-  signature_data_url text NOT NULL,
-  admin_memo text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT applications_unique_per_unit UNIQUE (dong, ho)
+  selected_options jsonb NOT NULL DEFAULT '[]'::jsonb,
+  selected_options_summary text,
+  total_price numeric NOT NULL DEFAULT 0,
+  signature_data_url text NOT NULL DEFAULT '',
+  printed boolean NOT NULL DEFAULT true,
+  status text NOT NULL DEFAULT '접수됨',
+  created_at timestamptz NOT NULL DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS public.yyc_receipt_counter (
-  id int PRIMARY KEY DEFAULT 1,
-  current_no int NOT NULL DEFAULT 0,
-  CHECK (id = 1)
-);
-INSERT INTO public.yyc_receipt_counter(id, current_no) VALUES (1, 0)
-ON CONFLICT DO NOTHING;
-ALTER TABLE public.yyc_receipt_counter DISABLE ROW LEVEL SECURITY;
-
-CREATE OR REPLACE FUNCTION public.next_yyc_receipt_no()
-RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE v_next int;
-BEGIN
-  UPDATE public.yyc_receipt_counter
-     SET current_no = current_no + 1
-   WHERE id = 1
-   RETURNING current_no INTO v_next;
-  RETURN 'YYC-' || to_char(now() AT TIME ZONE 'Asia/Seoul', 'YYYY')
-              || '-' || lpad(v_next::text, 4, '0');
-END $$;
-REVOKE ALL ON FUNCTION public.next_yyc_receipt_no() FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.next_yyc_receipt_no() TO anon, authenticated;
-
 ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.applications FROM PUBLIC;
-
-CREATE OR REPLACE FUNCTION public.submit_application(p jsonb)
-RETURNS TABLE(receipt_no text)
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-DECLARE
-  v_dong text := regexp_replace(coalesce(p->>'dong',''), '\D','','g');
-  v_ho   text := regexp_replace(coalesce(p->>'ho',''),   '\D','','g');
-  v_receipt text;
-BEGIN
-  IF EXISTS (SELECT 1 FROM public.applications WHERE dong = v_dong AND ho = v_ho) THEN
-    RAISE EXCEPTION 'duplicate_application' USING ERRCODE = 'P0001';
-  END IF;
-  v_receipt := public.next_yyc_receipt_no();
-  INSERT INTO public.applications(
-    receipt_no, customer_name, dong, ho, unit_type,
-    resident_id_first6, phone, email, address,
-    emergency_name, emergency_phone,
-    options, total_amount, signature_data_url, admin_memo
-  ) VALUES (
-    v_receipt,
-    trim(p->>'customer_name'),
-    v_dong, v_ho,
-    p->>'unit_type',
-    p->>'resident_id_first6',
-    p->>'phone',
-    lower(trim(p->>'email')),
-    p->>'address',
-    nullif(trim(coalesce(p->>'emergency_name','')), ''),
-    nullif(trim(coalesce(p->>'emergency_phone','')), ''),
-    coalesce(p->'options', '[]'::jsonb),
-    coalesce((p->>'total_amount')::int, 0),
-    p->>'signature_data_url',
-    nullif(trim(coalesce(p->>'admin_memo','')), '')
-  );
-  RETURN QUERY SELECT v_receipt;
-END $$;
-REVOKE ALL ON FUNCTION public.submit_application(jsonb) FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.submit_application(jsonb) TO anon, authenticated;
 ```
+
+</details>
+
+### (2) 함수 — 레포 SQL 파일 **전체** 실행 (권장)
+
+| 순서 | 파일 |
+|------|------|
+| 1 | `supabase/sql/next_yyc_receipt_no.sql` |
+| 2 | `supabase/sql/submit_application.sql` |
+
+앱 호출: `POST /rpc/next_yyc_receipt_no` `{}` → `POST /rpc/submit_application` `{"payload":{...}}`
 
 ---
 
@@ -235,46 +188,10 @@ GRANT  EXECUTE ON FUNCTION public.admin_reset_yyc_receipt_counter() TO authentic
 
 ## A-5. 보안 최종 잠금 (17장)
 
-```sql
-REVOKE ALL ON public.applications           FROM anon, authenticated;
-REVOKE ALL ON public.yyc_resident_registry  FROM anon, authenticated;
-REVOKE ALL ON public.yyc_receipt_counter    FROM anon, authenticated;
-REVOKE ALL ON public.app_admins             FROM anon, authenticated;
+**한 번에:** `supabase/sql/applications_rls_lockdown.sql` 전체 Run (13-3 `is_admin()` 선행).
 
-ALTER TABLE public.applications          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.yyc_resident_registry ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_admins            ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS applications_select_admin ON public.applications;
-DROP POLICY IF EXISTS applications_modify_admin ON public.applications;
-DROP POLICY IF EXISTS registry_admin_only       ON public.yyc_resident_registry;
-DROP POLICY IF EXISTS admins_select_admin       ON public.app_admins;
-
-CREATE POLICY applications_select_admin
-  ON public.applications FOR SELECT TO authenticated
-  USING (public.is_admin());
-
-CREATE POLICY applications_modify_admin
-  ON public.applications FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
-CREATE POLICY registry_admin_only
-  ON public.yyc_resident_registry FOR ALL TO authenticated
-  USING (public.is_admin()) WITH CHECK (public.is_admin());
-
-CREATE POLICY admins_select_admin
-  ON public.app_admins FOR SELECT TO authenticated
-  USING (public.is_admin());
-
-GRANT EXECUTE ON FUNCTION public.verify_yyc_resident(text,text,text,text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.submit_application(jsonb)                TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.next_yyc_receipt_no()                    TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.is_admin()                               TO authenticated;
-GRANT EXECUTE ON FUNCTION public.list_applications()                      TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_application(bigint)                  TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_clear_all_applications()           TO authenticated;
-GRANT EXECUTE ON FUNCTION public.admin_reset_yyc_receipt_counter()        TO authenticated;
-```
+- `list_applications` / `get_application` GRANT 없음 (현재 앱은 REST `applications` + RLS)
+- 느슨한 DELETE 정책(`applications_delete_policy.sql`) 은 잠금 후 **불필요** — 있으면 lockdown SQL 이 DROP
 
 ---
 
@@ -287,15 +204,15 @@ SELECT unit_type, count(*) FROM public.applications GROUP BY 1 ORDER BY 1;
 
 -- 옵션별 매출 합계 (jsonb 풀어 보기)
 SELECT o->>'label' AS option_label,
-       sum((o->>'price')::int) AS total
-FROM public.applications, jsonb_array_elements(options) o
+       sum((o->>'price')::numeric) AS total
+FROM public.applications, jsonb_array_elements(selected_options) o
 GROUP BY 1 ORDER BY 2 DESC;
 
 -- 등록부 인원
 SELECT count(*) FROM public.yyc_resident_registry;
 
--- 현재 접수번호
-SELECT current_no FROM public.yyc_receipt_counter WHERE id = 1;
+-- 올해 접수번호 일련 (카운터)
+SELECT year, seq FROM public.yyc_receipt_counter ORDER BY year;
 
 -- 관리자 명단
 SELECT * FROM public.app_admins;

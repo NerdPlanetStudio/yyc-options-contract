@@ -96,14 +96,10 @@ Cursor 채팅창(`Cmd + L` 또는 `Ctrl + L`):
 왼쪽 파일 트리에서 **`.github/workflows/pages.yml`** 가 새로 보여야 함.
 
 
-✅ 파일 안에 `name: Deploy GitHub Pages`, `branches: [main]`, `VITE_BASE: /yyc-options/` 같은 줄이 보이면 OK.
+✅ 파일 안에 `name: Deploy GitHub Pages`, `branches: [main]`,  
+`VITE_BASE: /${{ github.event.repository.name }}/` 가 보이면 OK (레포 이름에 맞게 **자동**).
 
-⚠️ **`yyc-options` 가 아닌 다른 이름으로 만들었다면** → 위 워크플로 안의 `VITE_BASE` 값도 그 이름에 맞게 바꿔야 합니다. AI에게:
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> @pages.yml 의 VITE_BASE 를 /내실제레포이름/ 으로 바꿔줘.
-> ```
+⚠️ GitHub **Secrets** (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) 는 16장에서 등록합니다.
 
 ---
 

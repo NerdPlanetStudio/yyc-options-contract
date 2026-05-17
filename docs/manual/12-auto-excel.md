@@ -1,213 +1,140 @@
 # 12장. 신청 들어올 때마다 엑셀에 자동 누적
 
 > **이 장에서 완성하는 것**  
-> 누가 신청서를 제출하면 → 1초 안에 **Storage 의 `yyc-contract-live_V1.xlsx` 마지막 줄에 자동 추가**.  
+> 11장에서 `applications` 에 **INSERT** 될 때마다 → Storage 의 `yyc-contract-live_V1.xlsx` **피벗 시트** 마지막에 한 줄 추가.  
 > 관리자는 항상 "지금까지 모든 신청" 이 들어찬 엑셀 1개를 받게 됩니다.  
 >
+> **선행**: 11장 (`submit_application` RPC + 테이블 스키마) 완료  
 > **소요 시간**: 약 2.5시간  
 > **난이도**: ★★★★ (Edge Function 첫 등장)
 
 ---
 
-## 12-1. 미리 알아두기 (1줄 비유)
+## 12-1. 미리 알아두기
 
 | 용어 | 1줄 비유 |
 |------|---------|
-| **Storage 버킷** | "Supabase 안의 클라우드 폴더" |
-| **Edge Function** | "DB 옆에 사는 작은 알바 — Supabase가 직접 돌려줌" |
-| **Database Webhook** | "행이 들어오면 → 알바한테 전화해줘" |
-| **`xlsx` 라이브러리** | "엑셀 파일 읽고/쓰는 도구" |
-| **WORKBOOK_WEBHOOK_SECRET** | "알바실 출입 비밀번호 — 아무나 못 부르게" |
+| **Storage 버킷** | Supabase 안의 클라우드 폴더 |
+| **Edge Function** | DB 옆 작은 알바 — `append-workbook-row` |
+| **Database Webhook** | `applications` 에 행이 생기면 알바에게 POST |
+| **피벗 시트** | 옵션 종류마다 **열**이 나뉜 엑셀 (한 신청 = 한 행) |
+| **`selected_options`** | 11장 JSON 배열 — 함수가 열 금액으로 펼침 |
+| **WORKBOOK_WEBHOOK_SECRET** | Webhook ↔ 함수 사이 출입 비밀번호 |
 
-전체 흐름:
+전체 흐름 (11장과 이어짐):
+
 ```
-[사용자 제출] → applications INSERT
-              → Database Webhook
-                → Edge Function append-workbook-row 호출
-                  → Storage의 엑셀 다운 → 한 줄 추가 → 다시 업로드
+[사용자 step 2 「신청완료」]
+  → next_yyc_receipt_no
+  → submit_application({ payload })
+  → applications INSERT
+       → Database Webhook (Insert)
+            → POST …/functions/v1/append-workbook-row
+                 → Storage xlsx 다운로드
+                 → selected_options 를 피벗 열에 합산
+                 → 마지막 데이터 행 다음에 1줄 추가 → 다시 업로드
 ```
+
+Webhook 이 보내는 `record` 는 **DB에 저장된 한 행** 과 같습니다.  
+예전 교재 필드(`options`, `total_amount`, `resident_id_first6` …)는 **쓰지 않습니다.**
+
+| DB / Webhook `record` | 엑셀에 쓰이는 곳 |
+|----------------------|------------------|
+| `receipt_no` | 접수번호 |
+| `unit_type` | 타입 |
+| `dong`, `ho` | 동, 호수 |
+| `customer_name` | 계약자 |
+| `phone` (뒷 4자리) | 휴대폰 번호 4자리 |
+| `selected_options` | 시트판넬 ~ 스마트복합환풍기 열 (금액) |
+| `total_price` | 총액 |
 
 ---
 
 ## 12-2. Storage 버킷·템플릿 준비
 
-### (1) Supabase 왼쪽 메뉴 **Storage**
-### (2) **New bucket**
+### (1) Supabase **Storage** → **New bucket**
 
 | 항목 | 값 |
 |------|-----|
 | Name | `application-workbook` |
-| Public bucket | ⛔ **OFF** (비공개) |
+| Public bucket | ⛔ **OFF** |
 
-→ Create bucket.
+### (2) 피벗 템플릿 엑셀
 
-[스크린샷: New bucket 모달]
+시트 이름은 아래 **둘 중 하나** (코드가 순서대로 찾음):
 
-### (3) 빈 템플릿 엑셀 1개 준비
+- `옵션 신청 현황` (권장)
+- `Sheet1 (2)`
 
-엑셀 새 파일 → **A1=순번, B1=접수번호, C1=용도, … (헤더만)** ← **데이터 줄 없음** 으로 저장.  
-파일명: `yyc-contract-live_V1.xlsx`.
+**1행 헤더**는 `supabase/functions/append-workbook-row/index.ts` 의 `HEADERS` 와 **글자 하나까지** 같아야 합니다.
 
-> 💡 헤더 목록은 코드에서 정확히 일치해야 합니다. 가장 간단한 방법은:  
-> 12-3 의 Edge Function 코드를 먼저 본 뒤 그 안의 `HEADERS` 배열을 그대로 엑셀 1행에 가로로 복사.
+| 열 | 헤더 (1행) |
+|----|------------|
+| A~H | 순번, 접수번호, 용도, 타입, 동, 호수, 계약자, 휴대폰 번호 4자리 |
+| I~Z | 시트판넬, 거실 마감재 특화, 욕실 마감재 특화, 주방 마감 및 가구 특화, 드레스룸 특화, 붙박이장(침실1~3), 인덕션(3구), 빌트인오븐, 식기세척기, 냉장고패키지, 시스템에어컨, 비데일체형 양변기(욕실1~2), 비데(욕실1~2), 스마트복합환풩기 |
+| AA | 총액 |
 
-[스크린샷: 엑셀 파일 — 1행만 헤더, 2행 이후 비어 있음]
+- **2행 이후는 비움** (샘플 데이터 넣지 않기 — 15장 초기화 시 헷갈림).
+- 파일명: **`yyc-contract-live_V1.xlsx`**
 
-### (4) 버킷에 업로드
+> 💡 가장 빠른 방법: 운영에서 쓰는 피벗 엑셀을 복사해 **데이터만 지우고** 1행 헤더만 남긴 뒤 업로드.
 
-Storage → `application-workbook` 클릭 → **Upload file** → 위 엑셀 선택.  
-업로드 후 파일명이 정확히 **`yyc-contract-live_V1.xlsx`** 인지 확인.
+### (3) 버킷에 업로드
+
+Storage → `application-workbook` → **Upload** → `yyc-contract-live_V1.xlsx`
 
 ---
 
-## 12-3. Edge Function 폴더·파일 만들기
+## 12-3. Edge Function (레포에 이미 있음)
 
-Cursor 왼쪽 트리 → 프로젝트 루트에 폴더 생성:
+Cursor에서 확인:
+
 ```
-supabase/
-  functions/
-    append-workbook-row/
-      index.ts
-```
-
-`index.ts` 에 그대로 복붙:
-
-```ts
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import * as XLSX from "https://esm.sh/xlsx@0.18.5";
-
-const HEADERS = [
-  "순번","접수번호","용도","동","호","평형",
-  "계약자명","주민등록번호 앞6","휴대폰","이메일","주소",
-  "비상연락처(이름)","비상연락처(전화)",
-  "선택옵션","합계금액","관리자메모","접수일시"
-];
-
-const SHEET_NAME = "신청서";
-
-const corsHeaders = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "POST, OPTIONS",
-  "access-control-allow-headers":
-    "authorization, x-client-info, apikey, content-type, x-workbook-secret"
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-
-  try {
-    const expected = Deno.env.get("WORKBOOK_WEBHOOK_SECRET") ?? "";
-    const got = req.headers.get("x-workbook-secret") ?? "";
-    if (!expected || got !== expected) {
-      return new Response("unauthorized", { status: 401, headers: corsHeaders });
-    }
-
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-    const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const bucket = Deno.env.get("WORKBOOK_BUCKET") ?? "application-workbook";
-    const objectKey = Deno.env.get("WORKBOOK_OBJECT_KEY") ?? "yyc-contract-live_V1.xlsx";
-    const templateUrl = Deno.env.get("TEMPLATE_PUBLIC_URL") ?? "";
-
-    const body = await req.json();
-    const r = body?.record ?? {};
-
-    const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
-      auth: { persistSession: false }
-    });
-
-    let buf: ArrayBuffer | null = null;
-    const dl = await supabase.storage.from(bucket).download(objectKey);
-    if (dl.data) {
-      buf = await dl.data.arrayBuffer();
-    } else if (templateUrl) {
-      const res = await fetch(templateUrl);
-      if (!res.ok) return new Response("422 template fetch failed", { status: 422, headers: corsHeaders });
-      buf = await res.arrayBuffer();
-    } else {
-      return new Response("422 workbook missing and TEMPLATE_PUBLIC_URL unset", { status: 422, headers: corsHeaders });
-    }
-
-    const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
-    const ws = wb.Sheets[SHEET_NAME] ?? wb.Sheets[wb.SheetNames[0]];
-    if (!ws) return new Response("422 sheet missing", { status: 422, headers: corsHeaders });
-
-    const head = XLSX.utils.sheet_to_json(ws, { header: 1, range: 0 })[0] as string[];
-    if (!head || HEADERS.some((h, i) => (head[i] ?? "").toString().trim() !== h)) {
-      return new Response("422 header mismatch on pivot sheet", { status: 422, headers: corsHeaders });
-    }
-
-    const existing = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
-    const nextNo = existing.length;
-
-    const optionsLabel = Array.isArray(r.options)
-      ? r.options.map((o: any) => `${o.label}(${(o.price ?? 0).toLocaleString()}원)`).join(", ")
-      : "";
-    const createdAt = new Date(r.created_at ?? Date.now())
-      .toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
-
-    const newRow = [
-      nextNo, r.receipt_no, "옵션신청",
-      r.dong, r.ho, r.unit_type,
-      r.customer_name, r.resident_id_first6,
-      r.phone, r.email, r.address,
-      r.emergency_name ?? "", r.emergency_phone ?? "",
-      optionsLabel, r.total_amount ?? 0,
-      r.admin_memo ?? "", createdAt
-    ];
-
-    XLSX.utils.sheet_add_aoa(ws, [newRow], { origin: -1 });
-    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-
-    const up = await supabase.storage.from(bucket)
-      .upload(objectKey, new Blob([out]), { upsert: true, contentType:
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    if (up.error) return new Response("500 " + up.error.message, { status: 500, headers: corsHeaders });
-
-    return new Response(JSON.stringify({ ok: true, no: nextNo }), {
-      headers: { ...corsHeaders, "content-type": "application/json" }
-    });
-  } catch (e) {
-    return new Response("500 " + (e?.message ?? String(e)), { status: 500, headers: corsHeaders });
-  }
-});
+supabase/functions/append-workbook-row/index.ts
+supabase/config.toml
 ```
 
-루트에 **`supabase/config.toml`** 도 만들고:
+**새 프로젝트를 1장부터 만든 경우**에도, 이 레포를 clone 했다면 **파일을 새로 짤 필요 없습니다.**  
+내용만 아래와 맞는지 눈으로 확인하세요.
+
+- `Deno.serve` + `x-workbook-secret` 검증
+- `body.record` (Webhook INSERT 본문) 읽기
+- `selected_options` → `option_id` / `category` / `label` 로 피벗 열 인덱스 계산
+- 시트 `옵션 신청 현황` 또는 `Sheet1 (2)`
+- 용도 열 고정값: **`도시형생활주택`**
+
+`supabase/config.toml` (JWT 끔 — Webhook 용):
 
 ```toml
-project_id = "yyc-options"
-
 [functions.append-workbook-row]
 verify_jwt = false
 ```
 
+> 부록 **B-1** 에도 요약이 있습니다. 전체 소스는 위 `index.ts` 가 정본입니다.
+
 ---
 
-## 12-4. Supabase CLI 설치 + 로그인 + 시크릿
+## 12-4. Supabase CLI + 시크릿 + 배포
 
-### (1) CLI 설치 (한 번만)
-Cursor 터미널:
+### (1) CLI (한 번만)
+
 ```bash
 npm install -g supabase
+supabase --version
 ```
-✅ 끝나면 `supabase --version` 으로 버전 1줄.
 
-### (2) 로그인
+### (2) 로그인·연결
+
 ```bash
 supabase login
-```
-→ 브라우저 자동 열림 → Authorize.
-
-### (3) 프로젝트 연결
-4장에서 받은 프로젝트 Ref 가 필요. URL `https://abcd1234.supabase.co` 에서 **`abcd1234`** 부분.
-
-```bash
 supabase link --project-ref abcd1234
 ```
 
-### (4) 비밀번호 정해서 시크릿 등록
-이 비밀번호는 12-5의 웹훅에도 똑같이 넣을 거예요. 메모장에 적어두기.
+(`abcd1234` = 대시보드 URL `https://abcd1234.supabase.co` 의 Ref)
+
+### (3) 시크릿
+
+12-5 Webhook 헤더와 **같은** 비밀번호를 메모해 두세요.
 
 ```bash
 supabase secrets set WORKBOOK_WEBHOOK_SECRET="원하는비밀번호16자이상"
@@ -215,84 +142,110 @@ supabase secrets set WORKBOOK_BUCKET="application-workbook"
 supabase secrets set WORKBOOK_OBJECT_KEY="yyc-contract-live_V1.xlsx"
 ```
 
-### (5) 배포
+Storage 에 아직 xlsx 가 없으면 (15장 초기화용):
+
 ```bash
+supabase secrets set TEMPLATE_PUBLIC_URL="https://내아이디.github.io/yyc-options/templates/피벗템플릿.xlsx"
+```
+
+### (4) 배포
+
+```bash
+cd /경로/yyc-options
 supabase functions deploy append-workbook-row --no-verify-jwt
 ```
-✅ `Deployed Function` 메시지가 뜨면 OK.
 
-⚠️ `not in a project directory` → `cd /경로/yyc-options` 후 다시.
+✅ `Deployed Function`  
+⚠️ `not in a project directory` → `cd` 로 프로젝트 루트 이동 후 재실행.
 
 ---
 
-## 12-5. Database Webhook 만들기 (Supabase 대시보드)
+## 12-5. Database Webhook
 
-### (1) 왼쪽 메뉴 **Database → Webhooks** → **Create a new hook**
-
-[스크린샷: Database → Webhooks 메뉴]
-
-### (2) 입력
+**Database → Webhooks → Create a new hook**
 
 | 항목 | 값 |
 |------|-----|
 | Name | `applications-insert-to-workbook` |
 | Table | `applications` |
 | Events | ✅ **Insert** 만 |
-| Type | `HTTP Request` |
-| Method | `POST` |
+| Type | HTTP Request |
+| Method | POST |
 | URL | `https://abcd1234.supabase.co/functions/v1/append-workbook-row` |
-| HTTP Headers | `x-workbook-secret` = 12-4(4)에서 정한 비밀번호 |
+| HTTP Headers | `x-workbook-secret` = 12-4 에서 정한 비밀번호 |
 
-→ **Confirm**
+Supabase 가 보내는 JSON 예시 (일부):
 
-[스크린샷: Webhook 폼 — URL과 헤더 한 줄]
+```json
+{
+  "type": "INSERT",
+  "table": "applications",
+  "record": {
+    "receipt_no": "YYC-20260516001",
+    "customer_name": "홍길동",
+    "phone": "5678",
+    "dong": "101",
+    "ho": "1201",
+    "unit_type": "55A",
+    "selected_options": [
+      { "option_id": "a_ind", "category": "주방", "label": "인덕션", "price": 500000 }
+    ],
+    "total_price": 500000,
+    "status": "접수됨"
+  }
+}
+```
+
+함수는 `record.selected_options` 와 `record.total_price` 만 사용합니다.  
+`signature_data_url` 은 엑셀에 넣지 않습니다 (DB·관리자 화면용).
 
 ---
 
 ## 12-6. 끝부터 끝까지 시험
 
-브라우저에서 신청 1건 더 제출.  
-1) Supabase **Storage → application-workbook → yyc-contract-live_V1.xlsx** "업데이트 시간"이 방금으로 바뀌었나  
-2) 다운로드해서 열기 → 마지막 행에 방금 신청 1줄 추가됐나
+1. 앱에서 **11장과 동일하게** 신청 1건 제출 (`step 2` 신청완료).  
+2. Supabase **Table Editor** → `applications` 최신 행 확인.  
+3. **Storage** → `application-workbook` → `yyc-contract-live_V1.xlsx` **Updated** 시간이 방금인지.  
+4. xlsx 다운로드 → 마지막 행에 접수번호·동·호·옵션 열 금액·총액이 맞는지.  
+5. **Edge Functions → append-workbook-row → Logs** 에 `200` + `{"ok":true,...}`.
 
-[스크린샷: 엑셀 마지막 행에 새 신청 한 줄]
-
-✅ 잘 추가되면 **자동 누적 엑셀** 완성. 14장(관리자 다운로드)에서 이 파일을 안전하게 받게 만듭니다.
+✅ 되면 14장(관리자 다운로드)에서 같은 파일을 **서명 URL** 로 받게 합니다.
 
 ---
 
 ## 12-7. 자주 나는 에러
 
-| 화면 | 원인 | 해결 |
-|------|------|------|
-| Webhook 결과 401 | secret 불일치 | 시크릿/헤더 양쪽 비번 똑같이 |
-| 422 header mismatch | 엑셀 1행 헤더가 코드와 다름 | 엑셀 1행을 코드의 `HEADERS` 그대로 |
-| 422 workbook missing | 버킷·파일명 불일치 | secrets 의 `WORKBOOK_OBJECT_KEY` 와 실제 파일명 동일 |
-| 500 storage upload fail | 버킷 권한/이름 오타 | `application-workbook` 정확히 |
-| Webhook 도는데 엑셀 안 바뀜 | 캐시 | Storage 새로고침. 한 번 더 신청 |
-| `not in a project directory` | CLI 위치 | `cd 프로젝트경로` |
-| `verify_jwt` 401 | jwt 검사 켜짐 | 배포 시 `--no-verify-jwt` 또는 config.toml 확인 |
+| 화면 / 로그 | 원인 | 해결 |
+|-------------|------|------|
+| 401 `unauthorized` | secret 불일치 | `secrets set` + Webhook 헤더 동일 값 |
+| 400 `missing record` | Webhook 본문 없음 / 테이블 잘못 | Insert + `applications` 인지 |
+| 422 `header mismatch on pivot sheet` | 1행 헤더 ≠ 코드 `HEADERS` | 12-2 표대로 1행 수정 후 재업로드 |
+| 422 `pivot sheet missing` | 시트 이름 다름 | `옵션 신청 현황` 또는 `Sheet1 (2)` |
+| 422 `workbook missing…` | 버킷에 파일 없음 | xlsx 업로드 또는 `TEMPLATE_PUBLIC_URL` |
+| 500 storage upload | 버킷명·권한 | `application-workbook`, service_role |
+| Webhook OK인데 열 비어 있음 | `selected_options` 빈 배열 | 앱에서 옵션 선택 후 재신청 |
+| 옵션 열은 있는데 총액만 0 | `total_price` 미저장 | 11장 `submit_application.sql` 재실행 |
 
 ---
 
-## 12-8. 12장 완료 체크리스트
+## 12-8. 완료 체크리스트
 
-- [ ] `application-workbook` 버킷 (비공개) 안에 헤더만 있는 엑셀 1개 업로드
-- [ ] `supabase/functions/append-workbook-row/index.ts` 가 있다
-- [ ] CLI 로 `secrets set` 3개 + `functions deploy` 완료
-- [ ] Webhook 1개 (Insert + URL + 헤더) 등록
-- [ ] 새 신청 1건 → 엑셀 마지막 줄 자동 추가
-- [ ] **Functions → Logs** 에 200 OK 가 보인다
+- [ ] 11장: `submit_application` INSERT 가 Table Editor 에 보인다
+- [ ] `application-workbook` 비공개 버킷 + 피벗 헤더만 있는 xlsx
+- [ ] `append-workbook-row` 배포 + `verify_jwt = false`
+- [ ] Webhook 1개 (Insert + URL + `x-workbook-secret`)
+- [ ] 신청 1건 → xlsx 마지막 행 + Functions Logs 200
 
 ---
 
 ## 12-9. 보안 메모
 
-- 버킷은 **비공개** 상태. 인터넷에서 URL 만으론 못 받음 → 14장에서 **서명 URL** 로 안전하게 받음.  
-- 웹훅·Edge Function 사이는 `WORKBOOK_WEBHOOK_SECRET` 로 보호.  
-- Edge Function 안에선 **service_role 키** 를 쓰지만, **외부엔 절대 안 노출** (Supabase 환경변수에만 존재).
+- 버킷은 **비공개**. URL 만으로는 다운로드 불가 → 14장 **sign-application-workbook**.  
+- Webhook ↔ 함수는 `WORKBOOK_WEBHOOK_SECRET` 만 신뢰.  
+- 함수 내부의 **service_role** 은 Supabase secrets 에만 두고, GitHub Pages·프런트에 넣지 않습니다.
 
 ---
 
-> 💪 **여기까지 오신 분께**  
-> 10·11·12 묶음으로 **신청 한 번 → DB 저장 → 자동 누적 엑셀** 까지 흐름이 한 번에 도는 진짜 시스템이 완성됐어요.
+> 💪 **10·11·12 묶음**  
+> 신청 한 번 → DB 저장 → **피벗 엑셀 자동 누적** 까지 한 바퀴가 돕니다.  
+> 다음: **13장** `#/admin` 관리자 목록 → **14장** 누적 xlsx 다운로드.

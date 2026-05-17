@@ -1,0 +1,48 @@
+# 매일 KST 03:00 (UTC 18:00) — Storage 누적 피벗 xlsx 백업 → Actions Artifact (30일)
+name: Backup application workbook
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download workbook from Supabase Storage
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: application-workbook
+          OBJECT_KEY: yyc-contract-live_V1.xlsx
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SERVICE_KEY:-}" ]; then
+            echo "Missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in repository secrets."
+            exit 1
+          fi
+          mkdir -p backups
+          STAMP=$(date -u +%Y%m%d)
+          OUT="backups/yyc-contract-live_${STAMP}.xlsx"
+          URL="${SUPABASE_URL%/}/storage/v1/object/${BUCKET}/${OBJECT_KEY}"
+          HTTP=$(curl -sS -o "$OUT" -w "%{http_code}" \
+            -H "Authorization: Bearer ${SERVICE_KEY}" \
+            -H "apikey: ${SERVICE_KEY}" \
+            "$URL")
+          if [ "$HTTP" != "200" ]; then
+            echo "Download failed HTTP ${HTTP}"
+            exit 1
+          fi
+          ls -la backups/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbook-backup-${{ github.run_id }}
+          path: backups/
+          retention-days: 30

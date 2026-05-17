@@ -1,12 +1,16 @@
 # 11장. 신청 데이터 인터넷 엑셀(DB)에 진짜 저장
 
 > **이 장에서 완성하는 것**  
-> 10장의 "제출" 누르면 → Supabase **applications** 테이블에 한 줄 저장.  
-> 같은 동·호의 중복 신청은 거부.  
-> 성공 시 **접수번호** 가 발급되고 "접수 완료" 화면으로 이동.  
+> 9장 **`step 2`** 에서 **「신청완료」** 를 누르면:  
+> 1. **`next_yyc_receipt_no`** 로 접수번호 발급 (`YYC-20260516001` 형식)  
+> 2. **`submit_application`** RPC 로 `applications` 테이블에 1줄 저장  
+> 3. 같은 화면에 **초록 접수 배너** + **계약서 미리보기** 팝업  
 >
-> **소요 시간**: 약 2.5시간  
-> **난이도**: ★★★★ (지금까지 중 가장 큼 — 그래도 SQL은 복붙)
+> **개인정보**: 주민번호·이메일·주소는 **받지 않습니다.**  
+> 게이트 4항목 + 선택 옵션 + 서명만 저장합니다.  
+>
+> **소요 시간**: 약 2시간  
+> **난이도**: ★★★★ (SQL은 파일 복붙 위주)
 
 ---
 
@@ -14,235 +18,218 @@
 
 | 용어 | 1줄 비유 |
 |------|---------|
-| **applications 테이블** | "신청서 보관함 — 1줄 = 1신청" |
-| **JSONB 칼럼** | "엑셀 셀 안에 작은 표를 그대로 넣을 수 있는 칸 (옵션 목록)" |
-| **접수번호 (receipt_no)** | "올해의 N번째 신청이라는 카운터" |
-| **submit_application RPC** | "1) 중복 검사 2) 접수번호 발급 3) 행 저장 — 한 매크로로" |
-| **NOT NULL / CHECK** | "이 칸은 비면 안 됨 / 이 패턴이어야 함" |
+| **`applications` 테이블** | "신청서 보관함 — 1줄 = 1신청" |
+| **`selected_options` (jsonb)** | "선택한 옵션 목록을 통째로 넣는 칸" |
+| **`selected_options_summary`** | "옵션 목록을 한 줄 글로 요약 (관리자·엑셀용)" |
+| **`next_yyc_receipt_no`** | "오늘 날짜 기준 일련번호 매기기" |
+| **`submit_application(payload)`** | "받은 JSON 그대로 INSERT (합계는 서버가 다시 계산)" |
+| **`buildApplicationPayloadFromState`** | "화면 상태 → 저장용 JSON 만드는 함수 (`App.jsx`)" |
+
+### 저장 흐름 (지금 코드)
+
+```
+신청완료 클릭
+  → fetchNextReceiptNoFromSupabase()     // POST /rpc/next_yyc_receipt_no
+  → buildApplicationPayloadFromState() // payload 조립
+  → saveApplicationToSupabase()         // POST /rpc/submit_application  body: { payload }
+  → 성공 배너 + 계약서 미리보기
+```
 
 ---
 
-## 11-2. SQL 한 번에 복붙 (테이블 + 카운터 + RPC)
+## 11-2. `applications` 테이블 만들기 (처음 1회)
 
-Supabase **SQL Editor → New query** → 아래 전체 복붙 → **Run**.
+Supabase **SQL Editor → New query** → 아래 실행 → **Run**.
 
 ```sql
--- 1) 신청서 테이블
 CREATE TABLE IF NOT EXISTS public.applications (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  receipt_no text UNIQUE,
-  customer_name text NOT NULL,
+  receipt_no text UNIQUE NOT NULL,
+  customer_name text NOT NULL DEFAULT '미입력',
+  phone text NOT NULL DEFAULT '',
   dong text NOT NULL,
   ho text NOT NULL,
   unit_type text NOT NULL,
-  resident_id_first6 text NOT NULL CHECK (resident_id_first6 ~ '^[0-9]{6}$'),
-  phone text NOT NULL,
-  email text NOT NULL,
-  address text NOT NULL,
-  emergency_name text,
-  emergency_phone text,
-  options jsonb NOT NULL DEFAULT '[]'::jsonb,
-  total_amount integer NOT NULL DEFAULT 0,
-  signature_data_url text NOT NULL,
-  admin_memo text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT applications_unique_per_unit UNIQUE (dong, ho)
+  selected_options jsonb NOT NULL DEFAULT '[]'::jsonb,
+  selected_options_summary text,
+  total_price numeric NOT NULL DEFAULT 0,
+  signature_data_url text NOT NULL DEFAULT '',
+  printed boolean NOT NULL DEFAULT true,
+  status text NOT NULL DEFAULT '접수됨',
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- 2) 접수번호 카운터
-CREATE TABLE IF NOT EXISTS public.yyc_receipt_counter (
-  id int PRIMARY KEY DEFAULT 1,
-  current_no int NOT NULL DEFAULT 0,
-  CHECK (id = 1)
-);
-INSERT INTO public.yyc_receipt_counter (id, current_no)
-VALUES (1, 0) ON CONFLICT DO NOTHING;
-ALTER TABLE public.yyc_receipt_counter DISABLE ROW LEVEL SECURITY;
-
--- 3) 다음 접수번호 발급 함수
-CREATE OR REPLACE FUNCTION public.next_yyc_receipt_no()
-RETURNS text
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_next int;
-BEGIN
-  UPDATE public.yyc_receipt_counter
-     SET current_no = current_no + 1
-   WHERE id = 1
-   RETURNING current_no INTO v_next;
-  RETURN 'YYC-' || to_char(now() AT TIME ZONE 'Asia/Seoul', 'YYYY')
-              || '-' || lpad(v_next::text, 4, '0');
-END;
-$$;
-REVOKE ALL ON FUNCTION public.next_yyc_receipt_no() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.next_yyc_receipt_no() TO anon, authenticated;
-
--- 4) RLS: 외부에서 직접 SELECT/INSERT 금지 (RPC만 허용)
 ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.applications FROM PUBLIC;
-
--- 5) 한 번에 처리하는 submit_application RPC
-DROP FUNCTION IF EXISTS public.submit_application(jsonb);
-
-CREATE OR REPLACE FUNCTION public.submit_application(p jsonb)
-RETURNS TABLE(receipt_no text)
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_dong text := regexp_replace(coalesce(p->>'dong',''), '\D', '', 'g');
-  v_ho   text := regexp_replace(coalesce(p->>'ho',''),   '\D', '', 'g');
-  v_receipt text;
-BEGIN
-  -- 중복 신청 차단
-  IF EXISTS (SELECT 1 FROM public.applications WHERE dong = v_dong AND ho = v_ho) THEN
-    RAISE EXCEPTION 'duplicate_application' USING ERRCODE = 'P0001';
-  END IF;
-
-  -- 접수번호 발급
-  v_receipt := public.next_yyc_receipt_no();
-
-  INSERT INTO public.applications(
-    receipt_no, customer_name, dong, ho, unit_type,
-    resident_id_first6, phone, email, address,
-    emergency_name, emergency_phone,
-    options, total_amount, signature_data_url, admin_memo
-  ) VALUES (
-    v_receipt,
-    trim(p->>'customer_name'),
-    v_dong, v_ho,
-    p->>'unit_type',
-    p->>'resident_id_first6',
-    p->>'phone',
-    lower(trim(p->>'email')),
-    p->>'address',
-    nullif(trim(coalesce(p->>'emergency_name','')), ''),
-    nullif(trim(coalesce(p->>'emergency_phone','')), ''),
-    coalesce(p->'options', '[]'::jsonb),
-    coalesce((p->>'total_amount')::int, 0),
-    p->>'signature_data_url',
-    nullif(trim(coalesce(p->>'admin_memo','')), '')
-  );
-
-  RETURN QUERY SELECT v_receipt;
-END;
-$$;
-REVOKE ALL ON FUNCTION public.submit_application(jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.submit_application(jsonb) TO anon, authenticated;
 ```
 
-✅ **Success. No rows returned** 메시지 확인.
+✅ Table Editor → `applications` 테이블이 보이면 성공.
 
-⚠️ 빨간 에러면 메시지를 그대로 Cursor 채팅에 붙이면서:
-> 🎯 **Cursor에 그대로 복사**  
+> **예전 교재 스키마**(`resident_id_first6`, `email`, `options`, `total_amount` …) 로 이미 만들어 둔 DB라면 아래 **11-2-1** 을 쓰세요.  
+> 테스트 DB만 비워도 되면: **`supabase/sql/applications_create_table.sql`** 만 실행해도 됩니다.
+
+### 11-2-1. 옛 DB → 지금 스키마로 맞추기 (운영 데이터 있을 때)
+
+1. (권장) Table Editor → `applications` → Export 백업  
+2. SQL Editor에서 **`supabase/sql/applications_migrate_to_current_schema.sql`** 전체 **Run**  
+3. 이어서 **11-3** (`next_yyc_receipt_no.sql` → `submit_application.sql`)
+
+✅ Table Editor 칼럼에 `selected_options`, `total_price`, `status` 등이 보이고  
+`resident_id_first6`, `email` 등은 사라지면 성공.
+
+### (선택) 같은 동·호 중복 막기
+
+운영 정책상 **1세대 1접수**만 허용할 때:
+
+```sql
+ALTER TABLE public.applications
+  ADD CONSTRAINT applications_unique_per_unit UNIQUE (dong, ho);
+```
+
+> 현재 `submit_application.sql` 은 RPC 안에서 중복 검사를 **하지 않습니다.**  
+> 위 제약이 있으면 두 번째 INSERT 시 DB 오류 → 앱에는 일반 실패 메시지로 보입니다.
+
+---
+
+## 11-3. 접수번호 + 저장 RPC SQL 파일 실행
+
+레포에 있는 SQL을 **통째로** Supabase에서 실행합니다. (교재에 긴 SQL 다시 적지 않음)
+
+### (1) 접수번호
+
+1. Cursor에서 파일 열기: **`supabase/sql/next_yyc_receipt_no.sql`**
+2. 전체 복사 → SQL Editor → **Run**
+
+✅ `yyc_receipt_counter` 테이블 + `next_yyc_receipt_no()` 함수 생성.
+
+테스트:
+
+```sql
+SELECT public.next_yyc_receipt_no();
+-- 예: YYC-20260516001
+```
+
+### (2) 신청 저장 RPC
+
+1. 파일: **`supabase/sql/submit_application.sql`**
+2. 전체 복사 → SQL Editor → **Run**
+
+✅ `submit_application(payload jsonb)` — **반환값 void** (접수번호는 앱이 미리 넣은 `payload.receipt_no` 사용).
+
+> ⚠️ 인자 이름은 **`payload`** 입니다. `{ p: ... }` 가 아닙니다.
+
+---
+
+## 11-4. 앱이 보내는 `payload` 모양 (확인용)
+
+`App.jsx` 의 `buildApplicationPayloadFromState` 가 만드는 JSON:
+
+```json
+{
+  "receipt_no": "YYC-20260516001",
+  "customer_name": "홍길동",
+  "phone": "5604",
+  "dong": "101",
+  "ho": "1504",
+  "unit_type": "59㎡A",
+  "selected_options": [
+    {
+      "option_id": "kitchen",
+      "option_key": "kitchen|주방 마감 및 가구 특화|...",
+      "category": "주방 마감 및 가구 특화",
+      "label": "...",
+      "price": 4500000
+    }
+  ],
+  "total_price": 4500000,
+  "signature_data_url": "data:image/png;base64,...",
+  "printed": true,
+  "status": "접수됨"
+}
+```
+
+| 필드 | 의미 |
+|------|------|
+| `phone` | **휴대폰 뒷 4자리** (전화번호 전체 아님) |
+| `unit_type` | 화면 표시 평형명 (`59㎡A`) |
+| `total_price` | 화면 합계 (DB에는 **옵션 price 합**으로 다시 계산해 저장) |
+
+---
+
+## 11-5. `App.jsx` 연결 확인 🎯
+
+이미 들어 있으면 **읽기만** 하세요.
+
+> 🎯 **처음부터 붙일 때 Cursor에 복사**  
 > ```
-> Supabase SQL Editor에서 위 SQL 돌렸는데 이 에러 떴어. 어디가 문제고 어떻게 고쳐?
-> [에러 메시지 붙여넣기]
+> @App.jsx
+> - onSubmitComplete (신청완료):
+>   1) fetchNextReceiptNoFromSupabase() → receiptNo
+>   2) buildApplicationPayloadFromState({ dong, ho, contractor, phoneLast4, unitType: typeData.name, selectedList, total, signData, receiptNo })
+>   3) POST /rest/v1/rpc/submit_application  body: JSON.stringify({ payload })
+>   4) 성공: submitResult ok 배너 + setContractPreviewOpen(true)
+>   5) 실패: submitResult err + noticeModal
+> - submitting 중 버튼 「제출 중...」, !signData 이면 disabled
+> step 은 2 유지 (별도 step 'done' 없음). Apply.
 > ```
 
 ---
 
-## 11-3. AI에게 "제출" 진짜 일하게 시키기 🎯
+## 11-6. 끝부터 끝까지 시험
 
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> @App.jsx step === 'sign' 의 "제출" 버튼 onClick 을 다음처럼 바꿔줘.
->
-> 1) 새 상태:
->    - const [submitting, setSubmitting] = useState(false)
->    - const [submitError, setSubmitError] = useState('')
->    - const [receiptNo, setReceiptNo] = useState('')
->
-> 2) 클릭 시:
->    - setSubmitting(true), setSubmitError('')
->    - selectedOptions = OPTIONS_CATALOG[verifiedTypeKey].filter(o => selected[o.key])
->      .map(o => ({ key: o.key, label: o.label, price: o.price }))
->    - totalAmount = selectedOptions.reduce((s,o)=>s+o.price,0)
->    - payload = {
->        customer_name, dong, ho, unit_type: verifiedTypeKey,
->        resident_id_first6, phone, email, address,
->        emergency_name, emergency_phone,
->        options: selectedOptions, total_amount: totalAmount,
->        signature_data_url: signature, admin_memo
->      }
->    - const { data, error } = await supabase.rpc('submit_application', { p: payload })
->    - error 가 있으면:
->        message = error.message || ''
->        if message.includes('duplicate_application')
->          → setSubmitError('이미 같은 동·호로 접수된 신청서가 있습니다. 관리자에게 문의해 주세요.')
->        else if message.includes('check') 또는 RLS 관련
->          → setSubmitError('입력값에 문제가 있습니다. 다시 확인해 주세요.')
->        else
->          → setSubmitError('일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.')
->    - 성공이면 setReceiptNo(data[0].receipt_no), setStep('done')
->    - finally setSubmitting(false)
->
-> 3) submitting 중이면 제출 버튼 텍스트 "제출 중..."
->    submitError 가 있으면 제출 버튼 위에 빨간 글씨
->
-> 4) step === 'done' 화면:
->    - 큰 체크 아이콘 + "접수가 완료되었습니다"
->    - 접수번호: {receiptNo}  (복사 버튼 작게)
->    - "처음으로" 버튼 → 모든 state 초기화 후 setStep('verify')
->
-> 변경 후 Apply.
-> ```
+```bash
+cd /Users/dongwoolim/yyc-options
+npm run dev
+```
 
----
-
-## 11-4. 끝부터 끝까지 시험
-
-브라우저 새로고침 → 6 → 7 → 8 → 9 → 10 → **제출**.
-
-[스크린샷: "접수가 완료되었습니다 — 접수번호 YYC-2026-0001"]
+`step 0` → 입주민 통과 → `step 1` 옵션 선택 → `step 2` 서명 완료 → **신청완료**
 
 | 시험 | 기대 |
 |------|------|
-| 정상 흐름 | 접수번호 1개 발급 + done 화면 |
-| **같은 동·호로** 다시 시도 | 빨간 글씨 "이미 같은 동·호로 접수…" |
-| 인터넷 끄고 제출 | "일시적인 오류…" |
-| Supabase **Table Editor → applications** 확인 | 방금 보낸 1줄 그대로 (서명은 긴 dataURL) |
+| 정상 제출 | 초록 배너 + **계약서 미리보기** 팝업 |
+| Table Editor | `receipt_no`, `dong`, `ho`, `selected_options`, `signature_data_url` 1줄 |
+| 접수번호 형식 | `YYC-YYYYMMDD` + 3자리 일련 (예: `YYC-20260516001`) |
+| 같은 호 재제출 | (UNIQUE dong,ho 넣었으면) 실패 메시지 |
+| RPC 없음 | 빨간 배너 + 모달에 SQL 실행 안내 문구 |
 
-✅ 다 OK면 11장 통과 — **MVP 핵심 흐름 완성**.
+[스크린샷: submit-banner--ok + Table Editor applications 1행]
+
+✅ OK면 **MVP 핵심(신청→DB) 완성**.
 
 ---
 
-## 11-5. 자주 나는 에러
+## 11-7. 자주 나는 에러
 
 | 화면 | 원인 | 해결 |
 |------|------|------|
-| `permission denied for function submit_application` | GRANT 안 됨 | 위 SQL 끝의 GRANT 줄 다시 Run |
-| `null value in column "..."` | 폼에서 빈 값 보냄 | 9장 검증 다시 점검 |
-| `duplicate key value violates unique constraint` | 같은 호 + applications_unique_per_unit | 정상. 안내문대로 |
-| Console에 거대한 base64가 두 번 출력 | 디버그 로그 남음 | console.log 지움 |
-| `function ... does not exist` | RPC 인자 타입 다름 | 클라에서 `{ p: payload }` 그대로 보냈는지 확인 |
+| `function next_yyc_receipt_no does not exist` | 11-3 (1) 미실행 | `next_yyc_receipt_no.sql` Run |
+| `function submit_application does not exist` | 11-3 (2) 미실행 | `submit_application.sql` Run |
+| `column "selected_options" does not exist` | 예전 테이블 스키마 | 11-2 마이그레이션 또는 새 테이블 |
+| `Invalid API key` | `.env.local` / GitHub Secrets | URL·anon key 재입력, dev 재시작 |
+| 접수번호 예전 형식 `YYC-2026-0001` | 옛 RPC | `next_yyc_receipt_no.sql` 다시 Run |
+| `null value in column "resident_id_first6"` | 옛 테이블 + 새 앱 | 11-2 스키마로 맞추기 |
+| 제출은 됐는데 합계가 0 | `selected_options` 비어 있음 | 정상(미선택형). price 숫자인지 확인 |
 
 ---
 
-## 11-6. 11장 완료 체크리스트
+## 11-8. 11장 완료 체크리스트
 
-- [ ] `applications`, `yyc_receipt_counter` 테이블이 생겼다
-- [ ] `submit_application(p jsonb)` RPC 가 있다
-- [ ] 처음 신청 → 접수번호 `YYC-2026-0001`
-- [ ] 같은 동·호 재시도 → 빨간 안내
-- [ ] Table Editor 에서 신청 1줄이 보인다
-- [ ] 처음으로 → 빈 입력 화면으로 정상 복귀
+- [ ] `applications` 테이블이 **지금 payload** 칼럼과 같다
+- [ ] `next_yyc_receipt_no.sql` · `submit_application.sql` 실행 완료
+- [ ] 테스트 신청 1건 → Table Editor에 1줄
+- [ ] 접수번호 `YYC-YYYYMMDD001` 형식
+- [ ] 신청 후 초록 배너 + 계약서 미리보기
+- [ ] **새로 작성** 으로 `step 0` 복귀 가능
 
 ---
 
-## 11-7. 보안 메모
+## 11-9. 보안 메모
 
-- `applications` 테이블은 **RLS ON + 직접 SELECT 금지**.  
-  외부 사람이 anon 키만 가지고는 1줄도 못 봅니다.  
-- 화면에 입력한 값은 모두 `submit_application` 매크로 1개로만 들어감.  
-- 다음 장(12)에서 **자동 누적 엑셀**까지 켜고 나면, **17장**에서 RLS·관리자 권한을 다시 한 번 단단히 잠급니다.
+- `applications` 는 **RLS ON + anon 직접 SELECT 금지** (13·17장에서 관리자만 조회).  
+- 신청자는 **RPC 2개**(`next_yyc_receipt_no`, `submit_application`)만 호출.  
+- 서명·개인정보는 DB에 들어가므로 Console `console.log(payload)` 남기지 않기.
 
 ---
 
 📌 **다음 장 미리보기**  
-12장에서 한 줄 신청이 들어올 때마다 **Storage 의 엑셀 파일에 자동으로 한 줄씩 누적**되도록 만듭니다.  
-Supabase **Edge Function + Database Webhook** 두 개를 처음 만져봅니다 — 그래도 복붙·클릭 위주.
+12장: 위 INSERT 가 일어날 때 Webhook → `append-workbook-row` 가 Storage 피벗 엑셀(`selected_options` 열 펼침)에 **한 줄 추가**.

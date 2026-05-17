@@ -43,6 +43,10 @@
 - **원인**: trim 미적용 또는 검증 조건 OR/AND 버그.  
 - **해결**: 4칸 모두 trim 후 비어있는지 확인. Cursor에 "현재 활성 조건 디버그 출력 후 고쳐줘".
 
+### F-09. 평면도·옵션 그림 안 보임 / `npm ENOENT package.json`
+- **원인**: Imgur URL 오타·삭제, 또는 **홈 폴더에서** `npm run dev` 실행.  
+- **해결**: 8장 **8-8~8-11** 절차. `cd .../yyc-options` 후 `npm run dev`. URL을 새 탭에 붙여 그림이 뜨는지 확인.
+
 ---
 
 ## 19-2. 데이터베이스 (Postgres / RPC / RLS)
@@ -52,20 +56,20 @@
 - **해결**: 17-2 SQL 끝부분 GRANT 줄 다시 Run.
 
 ### D-02. `function ... does not exist`
-- **원인**: 인자 타입/개수 다름.  
-- **해결**: 클라가 `{ p: payload }` 로 jsonb 1개를 보내는지 확인. 또는 `DROP FUNCTION` 후 재생성.
+- **원인**: `next_yyc_receipt_no.sql` / `submit_application.sql` 미실행.  
+- **해결**: 11-3 순서대로 Run. RPC 인자는 `{ payload: ... }` (키 이름 `payload`).
 
 ### D-03. `duplicate key value violates unique constraint "applications_unique_per_unit"`
-- **원인**: 같은 동·호 재신청.  
-- **해결**: 정상. 사용자 안내 "이미 같은 동·호로 접수…". 11-3.
+- **원인**: (선택) 동·호 UNIQUE 제약 + 같은 호 재신청.  
+- **해결**: 정상 차단. 안내 문구 추가 또는 관리자 초기화.
 
 ### D-04. `null value in column "..." violates not-null constraint`
-- **원인**: 폼 검증 빠짐 / 빈 문자열 들어옴.  
-- **해결**: 9장 검증 점검. 빈값은 `nullif(trim(...), '')` 로 NULL 처리.
+- **원인**: 옛 테이블 스키마(`email`, `resident_id_first6` 등) + 새 앱 payload.  
+- **해결**: 11-2 테이블 정의로 맞추기. `signature_data_url`·`receipt_no` 빈값 여부 확인.
 
-### D-05. `check constraint "applications_resident_id_first6_check" violated`
-- **원인**: 주민번호 앞6 이 숫자 6 아님.  
-- **해결**: 입력 단계에서 `\d{6}` 만 받기.
+### D-05. `column "selected_options" does not exist` (또는 `options`)
+- **원인**: DB는 예전 칼럼명, 앱은 `selected_options`.  
+- **해결**: 11-2·`submit_application.sql` 기준으로 마이그레이션.
 
 ### D-06. anon 으로도 `applications` 가 SELECT 됨
 - **원인**: RLS OFF 또는 정책에 USING (true).  
@@ -75,9 +79,9 @@
 - **원인**: `app_admins` 에 본인 이메일 없음.  
 - **해결**: `INSERT INTO app_admins(email) VALUES('admin@admin.com');`.
 
-### D-08. 접수번호가 항상 0001
-- **원인**: 옛 RPC가 카운터 안 올림.  
-- **해결**: 11-2 `next_yyc_receipt_no` 다시 Run.
+### D-08. 접수번호가 `YYC-2026-0001` 같은 옛 형식
+- **원인**: 옛 `next_yyc_receipt_no` RPC.  
+- **해결**: `supabase/sql/next_yyc_receipt_no.sql` 전체 다시 Run → `YYC-YYYYMMDD001` 형식.
 
 ### D-09. 초기화 후에도 카운터 안 줄어듦
 - **원인**: 옛 `admin_clear_all_applications` 사용 중.  
@@ -104,8 +108,16 @@
 - **해결**: `supabase secrets set` + Webhook Header 둘 다 같은 값.
 
 ### E-02. 422 `header mismatch on pivot sheet`
-- **원인**: 엑셀 1행 헤더가 코드의 `HEADERS` 배열과 다름.  
-- **해결**: 엑셀 1행을 12-3 의 `HEADERS` 그대로 다시 입력.
+- **원인**: 엑셀 1행 헤더가 `append-workbook-row/index.ts` 의 `HEADERS` 와 다름.  
+- **해결**: 12-2 표 / `index.ts` 의 `HEADERS` 그대로 1행 수정 후 Storage 재업로드.
+
+### E-02b. 422 `pivot sheet missing`
+- **원인**: 시트 이름이 `옵션 신청 현황`, `Sheet1 (2)` 가 아님 (예: 예전 교재 `신청서`).  
+- **해결**: 시트 이름 변경 또는 템플릿 교체.
+
+### E-02c. 400 `missing record`
+- **원인**: Webhook 본문에 `record` 없음 / 잘못된 테이블·이벤트.  
+- **해결**: Table=`applications`, Event=**Insert** 만. 11장 INSERT 가 먼저 되는지 확인.
 
 ### E-03. 422 `workbook missing and TEMPLATE_PUBLIC_URL unset`
 - **원인**: 버킷·파일명 오타 / 템플릿 URL 미설정.  
@@ -159,7 +171,7 @@
 
 ### S-04. 관리자 화면에서 alert(1) 뜸 (XSS)
 - **원인**: `dangerouslySetInnerHTML` 또는 raw `innerHTML` 잔여.  
-- **해결**: 17-4 프롬프트 다시. 모든 출력 JSX 또는 `escapeHtml`.
+- **해결**: `App.jsx` 관리자 `innerHTML` 에 `escapeHtml` 적용 여부 확인 (17-4).
 
 ### S-05. 일반인 anon 키로 데이터 다 읽힘
 - **원인**: RLS OFF / 정책 USING (true).  

@@ -1,10 +1,11 @@
 # 8장. 평형별 옵션 화면 만들기
 
 > **이 장에서 완성하는 것**  
-> 7장 통과 후 → 평형(예: `59A`)에 맞는 **옵션 카드 목록**이 나옵니다.  
-> 체크박스로 고르면 우측 합계가 실시간 갱신.  
+> 6·7장에서 만든 **첫 화면(계약자 정보)** 에서 입주민 확인이 끝나면 →  
+> **`step === 1` 옵션 화면**으로 넘어가고, 평형(예: `59㎡A`)에 맞는 **카테고리별 옵션 카드**가 나옵니다.  
+> **「선택」** 버튼으로 고르면 **오른쪽 사이드바 합계**가 바로 바뀝니다.  
 >
-> **소요 시간**: 약 2시간  
+> **소요 시간**: 약 2시간 (이미지 넣기는 8-7절 — 추가 1~2일)  
 > **난이도**: ★★★
 
 ---
@@ -13,98 +14,138 @@
 
 | 용어 | 1줄 비유 |
 |------|---------|
-| **옵션 카탈로그** | "평형별 메뉴판 (이 평형엔 이 옵션·이 가격)" |
-| **JSON / JS 객체** | "엑셀의 한 행을 그대로 코드로 적은 메모" |
-| **map / filter** | "엑셀 칼럼 변환·줄 골라내기" |
-| **합계 (reduce)** | "선택된 가격만 더하기 = SUMIF" |
+| **`src/optionsCatalog.js`** | "19개 평형 **메뉴판 + 가격 + 그림 주소** 한 파일 (단일 소스)" |
+| **`TYPES`** | "메뉴판 묶음 배열 — 평형 1개 = 객체 1개" |
+| **`opts`** | "그 평형의 마감·주방·붙박이·공간 옵션 줄 목록" |
+| **`getAppliances(t)`** | "가전(인덕션·냉장고·비데 등) 목록 — 평형마다 `ac`·`vent`·`dual` 가격만 다름" |
+| **`step`** | "지금 몇 번째 화면인지 번호 (0=입력, 1=옵션, 2=서명·제출)" |
+| **`sel`** | "선택한 옵션 id → 가격 맵 (엑셀 SUMIF용 메모)" |
+| **`CatalogImage`** | "평면도·비교 그림 여백을 흰색으로 맞춰 주는 표시 부품 (코드에 이미 있음)" |
+
+### 화면 흐름 (지금 프로젝트 기준)
+
+| step | 화면 | 하는 일 |
+|------|------|---------|
+| **0** | 계약자 정보 + 평형 버튼 | 동·호·이름·휴대폰 4자리 → **옵션 계약 신청 →** (입주민 RPC 확인) |
+| **1** | 평면도 + 옵션 카드 + **오른쪽 합계** | 카테고리별 **선택** 토글 → **신청서 확인 →** |
+| **2** | 신청 요약 + 서명 | 서명 후 제출 (10·11장과 연결) |
+
+> 💡 예전 교재의 `OPTIONS_CATALOG` 이름은 **쓰지 않습니다.** 지금은 **`TYPES` + `getAppliances`** 입니다.
 
 ---
 
-## 8-2. 카탈로그 파일 만들기
+## 8-2. `optionsCatalog.js` 구조 이해하기
 
-`src/optionsCatalog.js` 파일을 새로 만들어 **그대로 복붙**.
+파일 위치: **`src/optionsCatalog.js`** (이미 있으면 **열어서 가격·문구만 수정**).
+
+### (1) 평형 1개 블록 예시 (`59A`)
 
 ```js
-export const OPTIONS_CATALOG = {
-  '59A': [
-    { key: 'kitchen-up',   label: '주방 상부장 업그레이드',  price: 1_200_000 },
-    { key: 'floor-grade2', label: '바닥재 2등급',           price:   850_000 },
-    { key: 'window-blind', label: '전체 창 전동블라인드',    price: 2_400_000 },
-    { key: 'pantry',       label: '팬트리 추가',            price:   650_000 },
+export const TYPES = [
+  // ... 다른 평형 ...
+  {key:'59A', name:'59㎡A', opts:[
+    {id:'wall', cat:'벽 마감재 특화', label:'벽(현관, 복도, 거실, 주방) 시트 판넬', base:'실크 벽지', price:3400000},
+    {id:'living', cat:'거실마감재 특화', label:'거실 아트월(...)', base:'거실 아트월(...)', price:4200000, notes:['※ ...']},
+    {id:'kitchen', cat:'주방 마감 및 가구 특화', label:'...', base:'...', price:4500000,
+      baseImg:'https://i.imgur.com/y8vaEXd.png', img:'https://i.imgur.com/ukypmcj.png'},
+    {id:'closet_침실1', cat:'붙박이장', label:'...', base:'', price:3900000, baseImg:'...', img:'...'},
+    {id:'space', cat:'공간(드레스룸) 특화', label:'...', base:'', price:1200000,
+      baseImg:'...', img:'...', group:'g59A'},
   ],
-  '52A': [
-    { key: 'kitchen-up',   label: '주방 상부장 업그레이드',  price: 1_100_000 },
-    { key: 'floor-grade2', label: '바닥재 2등급',           price:   780_000 },
-    { key: 'pantry',       label: '팬트리 추가',            price:   620_000 },
-  ],
-  '48B': [
-    { key: 'kitchen-up',   label: '주방 상부장 업그레이드',  price: 1_000_000 },
-    { key: 'floor-grade2', label: '바닥재 2등급',           price:   720_000 },
-  ],
-  '65A': [
-    { key: 'kitchen-up',   label: '주방 상부장 업그레이드',  price: 1_300_000 },
-    { key: 'window-blind', label: '전체 창 전동블라인드',    price: 2_700_000 },
-    { key: 'pantry',       label: '팬트리 추가',            price:   720_000 },
-    { key: 'wine',         label: '와인셀러',               price: 1_900_000 },
-  ],
-  '79':  [
-    { key: 'kitchen-up',   label: '주방 상부장 업그레이드',  price: 1_500_000 },
-    { key: 'window-blind', label: '전체 창 전동블라인드',    price: 3_100_000 },
-    { key: 'wine',         label: '와인셀러',               price: 2_100_000 },
-    { key: 'aircon',       label: '시스템 에어컨 1대 추가',  price: 2_800_000 },
-  ],
-};
+  ac:6400000, vent:1200000, dual:true,
+  floorPlan:'https://i.imgur.com/UW6y8Yf.png',
+  fridgeBaseImg:'https://i.imgur.com/Wwqgatz.png',
+  fridgeImg:'https://i.imgur.com/CUL8p92.png'},
+];
 ```
 
-> 💡 **나중에 옵션·가격이 바뀌면 이 파일만 수정**해서 push 하면 끝.
+### (2) 칼럼(필드) 표 — 옵션 한 줄(`opts` 안)
+
+| 필드 | 필수 | 의미 |
+|------|------|------|
+| `id` | ✅ | 옵션 고유 이름 (영문·숫자, 예: `kitchen`) |
+| `cat` | ✅ | 화면 카테고리 제목 (예: `거실마감재 특화`) |
+| `label` | ✅ | 유상 선택형 설명 (긴 문장 OK) |
+| `base` | ✅ | 미선택형 설명 (`''` 가능) |
+| `price` | ✅ | 숫자만 (따옴표 없음) `4500000` |
+| `notes` | | 주의 문구 배열 `['※ ...', '※ ...']` |
+| `baseImg` / `img` | | 2열 비교 그림 URL (8-7절) |
+| `group` | | **상호 배타** — 같은 `group` 은 하나만 선택 |
+
+### (3) 평형 줄 끝 필드
+
+| 필드 | 의미 |
+|------|------|
+| `ac` | 시스템에어컨 가격 (가전 목록에 반영) |
+| `vent` | 환풍기 가격 |
+| `dual` | `true` = 욕실 2개 타입(비데 2세트), `false` = 1세트 |
+| `floorPlan` | 상단 평면도 URL |
+| `fridgeBaseImg` / `fridgeImg` | 냉장고 미선택/선택 그림 |
+
+### (4) 19개 평형 키 (`key`)
+
+`43`, `48A`, `48B`, `52A`, `52B`, `52C`, `55A`, `55B`,  
+`59A`, `59B`, `59C`, `59D`, `59E`, `59F`, `65A`, `65B`, `68`, `79`, `84`
+
+> 5장 등록부 `type_key` 와 **철자까지 동일**해야 자동 평형 선택이 맞습니다.
+
+### (5) 가전은 `getAppliances(t)` 에 있음
+
+`opts` 에 넣지 않아도 됩니다. `App.jsx` 가 평형 객체 `t` 를 넘겨 **인덕션·오븐·냉장고·비데** 등을 붙입니다.  
+가전 가격 중 `ac`, `vent` 는 평형 줄의 숫자를 씁니다.
+
+> 💡 **옵션·가격·주의문·이미지 URL이 바뀌면** 이 파일만 고치고 push 하면 신청 화면·관리자 엑셀 열이 같이 따라갑니다.
 
 ---
 
-## 8-3. AI에게 옵션 화면 만들라고 시키기 🎯
+## 8-3. `App.jsx` 와 연결 (이미 되어 있는지 확인)
 
-> 🎯 **Cursor에 그대로 복사**  
+`App.jsx` 상단에 아래가 있으면 **8-3은 읽기만** 하면 됩니다.
+
+```js
+import { TYPES, getAppliances } from "./optionsCatalog.js";
+import { CatalogImage } from "./CatalogImage.jsx";
+```
+
+> 🎯 **처음부터 다시 붙일 때만** Cursor에 복사  
 > ```
-> @App.jsx 에 다음을 추가/변경.
->
-> 1) 위에 import { OPTIONS_CATALOG } from './optionsCatalog'
->
-> 2) 상태:
->    - const [step, setStep] = useState('verify')   // 'verify' | 'options' | 'form' | 'done'
->    - const [selected, setSelected] = useState({}) // { key: true } 형태
->
-> 3) 7장의 검증 통과 시 setStep('options') 호출. (verifiedTypeKey 도 그대로 유지)
->
-> 4) step === 'options' 일 때 화면:
->    - 상단: "동 ○○○호 ○○○ 님 — 평형 {verifiedTypeKey}" (수정 버튼: setStep('verify'))
->    - 가운데: OPTIONS_CATALOG[verifiedTypeKey] 목록을 카드로 출력
->      각 카드: 좌측 체크박스 + 옵션명 + 우측 가격(천단위 콤마, 끝에 "원")
->      체크 시 카드 보더가 파란색·옅은 파란 배경
->    - 하단(스크롤해도 따라오는 sticky bar):
->      "선택 {n}개 / 합계 {amount}원"  +  큰 "신청서 작성" 버튼
->      선택 0개면 신청서 작성 버튼 disabled
->      신청서 작성 클릭 시 setStep('form')
->
-> 5) OPTIONS_CATALOG[verifiedTypeKey] 가 비어있거나 undefined 면
->    "이 평형은 옵션 대상이 아닙니다" 안내.
->
-> 모바일에서도 sticky bar 가 화면 아래 붙도록 position: sticky bottom: 0.
-> 변경 후 Apply.
+> @App.jsx @optionsCatalog.js
+> - import { TYPES, getAppliances } from './optionsCatalog.js'
+> - step 0: 계약자 4칸 + TYPES 평형 버튼 + verify_yyc_resident 통과 시 setStep(1)
+> - step 1: typeData = TYPES.find(t => t.key === typeKey)
+>   - 상단 floorPlan (CatalogImage)
+>   - getOrderedOptionCategories 로 PDF 순서대로 cat-section
+>   - 마감 옵션: cmp-card + 선택 토글, baseImg/img 있으면 2열 그림
+>   - 가전: app-table 맨 아래, 냉장고만 baseImg/img
+>   - 오른쪽 sidebar: 선택 목록 + 합계 + 「신청서 확인 →」 setStep(2)
+> - sel 상태: { [optionId]: price }
+> - group 있는 옵션은 상호 배타(다른 선택 시 excluded 표시)
+> 기존 10·11장 제출·서명 흐름은 유지. Apply.
 > ```
 
 ---
 
-## 8-4. 브라우저 확인
+## 8-4. 브라우저 확인 (`step === 1`)
 
-7장 통과 → 옵션 화면이 떠야 함.
+```bash
+cd /Users/dongwoolim/yyc-options
+npm run dev
+```
 
-1. 카드 체크/해제할 때 합계 즉시 변동
-2. 다 해제하면 "신청서 작성" 회색
-3. 위쪽 "수정" 누르면 다시 6장 입력 화면
-4. 폰 화면(F12 모바일 모드)에서 sticky bar가 아래 붙어 있나
+등록부에 있는 **테스트 동·호**로 6장 입력 → **옵션 계약 신청 →** 클릭.
 
-[스크린샷: 옵션 카드 + sticky 합계 바]
+✅ **성공 화면**
 
-✅ 다 OK면 8장 통과.
+1. **맨 위** 평면도(또는 placeholder)
+2. **카테고리 제목** (예: ▣ 거실마감재 특화 옵션 선택) — PDF 순서와 비슷
+3. 각 줄 **「선택」** → 누르면 파란 테두리 + 오른쪽 **선택 내역**에 추가
+4. **가전 옵션** 블록이 **맨 아래** (냉장고 2열 그림 포함 가능)
+5. 오른쪽 **합계** 숫자가 선택할 때마다 즉시 변경
+6. **「신청서 확인 →」** → 서명 화면(`step 2`)
+
+[스크린샷: 평면도 + 옵션 카드 + 오른쪽 선택 내역·합계]
+
+> 선택을 **0개**로 둬도 **「신청서 확인 →」** 는 누를 수 있습니다 (전체 미선택형 신청).
 
 ---
 
@@ -112,23 +153,224 @@ export const OPTIONS_CATALOG = {
 
 | 화면 | 원인 | 해결 |
 |------|------|------|
-| 옵션 화면이 빈 화면 | type_key 가 카탈로그에 없음 | 5장 등록부 type_key 와 카탈로그 키 일치 확인 |
-| 합계가 NaN | price가 문자열 | 카탈로그 가격을 숫자(number)로 |
-| 모바일에서 sticky bar 안 붙음 | 부모에 overflow: hidden | App 컨테이너 overflow 제거 |
-| 체크해도 색 변화 없음 | className 조건 누락 | "체크 시 카드 클래스 'selected' 토글" 추가 지시 |
+| 평형 버튼이 안 눌림 / 다음 회색 | 등록부 4항목 불일치 | 5장 `type_key`·이름·휴대폰 뒷4자리 확인 |
+| 옵션 화면이 비어 있음 | `typeKey` 가 `TYPES` 에 없음 | `optionsCatalog.js` 의 `key` 와 등록부 일치 |
+| 합계가 `NaN` | `price` 에 따옴표·쉼표 | `price:4500000` 숫자만 |
+| 카테고리 순서가 PDF와 다름 | `TYPE_OPTION_CARD_ORDER` | `App.jsx` 해당 객체에 평형 키 추가·순서 수정 |
+| 붙박이·공간 둘 다 안 됨 | `group` 상호 배타 | PDF 안내대로 하나만 선택 가능 (정상) |
+| 2열 그림이 안 나옴 | `cat` 이름 또는 URL 없음 | `주방 마감 및 가구 특화` 등 + `baseImg`/`img` (8-7) |
+| `npm ENOENT package.json` | 홈(`~`)에서 npm 실행 | `cd .../yyc-options` 후 실행 |
 
 ---
 
 ## 8-6. 8장 완료 체크리스트
 
-- [ ] `optionsCatalog.js` 파일이 만들어졌고 본인 평형도 들어 있다
-- [ ] 옵션 카드가 평형별로 다르게 나온다
-- [ ] 체크 시 합계가 즉시 갱신
-- [ ] 0개 선택 → "신청서 작성" 회색
-- [ ] "수정" 누르면 입력 화면으로 복귀
-- [ ] 모바일에서 합계 바가 아래 붙어 있다
+- [ ] `src/optionsCatalog.js` 에 **19개** `key` 가 있다
+- [ ] 등록부 `type_key` 와 카탈로그 `key` 가 같다
+- [ ] `step 1` 에서 평형별 **카테고리·옵션 문구**가 다르게 보인다
+- [ ] **선택** 토글 시 오른쪽 합계·선택 내역이 즉시 바뀐다
+- [ ] **신청서 확인 →** 로 `step 2` (서명) 이동
+- [ ] **← 처음으로** 로 `step 0` 복귀
+- [ ] (선택) 8-7~8-12 로 평면도·비교 이미지 URL 입력 완료
+
+---
+
+## 8-7. 평면도·옵션 비교 이미지 넣기 (실무 추가 작업)
+
+> **이 절에서 완성하는 것**  
+> PDF 안내서에 있는 **평면도**, **미선택형/선택형 비교 그림**이 신청 화면에 보입니다.  
+> **코드는 이미 들어 있습니다.** 운영자가 할 일은 **그림 파일 올리기 + URL 한 줄 붙이기** 뿐입니다.  
+>
+> **소요 시간**: 평형 1개당 약 10~20분 (19개 타입이면 하루~이틀 분량)  
+> **난이도**: ★★ (복붙 위주)
+
+### 8-7-1. 미리 알아두기 (1줄 비유)
+
+| 용어 | 1줄 비유 |
+|------|---------|
+| **`optionsCatalog.js`** | "19개 평형 메뉴판 + 그림 주소록 **한 파일**" |
+| **`floorPlan`** | "맨 위 큰 평면도 주소" |
+| **`baseImg` / `img`** | "왼쪽(미선택형) / 오른쪽(선택형) 비교 그림 주소" |
+| **Imgur** | "그림을 인터넷에 올려 두고 링크만 받는 무료 사진 창고" |
+| **표시 크기** | "주소만 맞으면 됨 — 화면 크기는 CSS가 맞춤 (타입마다 픽셀 맞출 필요 없음)" |
+
+### 8-7-2. 어떤 그림을 어디에 넣나
+
+| 화면에 보이는 것 | `optionsCatalog.js` 에 넣는 위치 | 필수? |
+|------------------|----------------------------------|--------|
+| 상단 **평면도** | 해당 평형 `{ key:'59A', ... floorPlan:'https://...' }` | ✅ 타입마다 1장 |
+| **주방·붙박이·공간** 2열 비교 | 해당 옵션 `{ ..., baseImg:'...', img:'...' }` | PDF에 그림 있을 때만 |
+| **냉장고** 미선택/선택 | `fridgeBaseImg`, `fridgeImg` (평형 줄 끝) | 가전 옵션 쓰는 타입만 |
+| 거실·욕실 등 **텍스트만** 옵션 | `baseImg` 없음 → 그림 칸 안 나옴 (정상) | — |
+
+> 💡 **작업 순서 추천**: ① 19개 타입 `floorPlan` 전부 → ② 주방/붙박이/공간 `baseImg`·`img` → ③ 냉장고(같은 URL 여러 타입 재사용 가능)
+
+---
+
+## 8-8. PDF에서 캡처 → Imgur에 올리기
+
+### (1) PDF에서 영역만 캡처
+
+1. PDF 뷰어(미리보기·Adobe 등)에서 **평면도 페이지** 또는 **옵션 비교 페이지**를 연다.
+2. **Mac**: `Command + Shift + 4` → 드래그해서 영역만 저장.  
+   **Windows**: `Win + Shift + S` → 영역 선택 → 저장.
+3. 파일 이름 예: `59A-평면도.png`, `59A-주방-미선택.png`
+
+[스크린샷: PDF 평면도 + 영역 캡처]
+
+✅ **성공 화면**: 바탕이 흰색에 가깝고, 도면·범례가 잘리지 않은 PNG 파일 1개가 바탕화면(또는 다운로드)에 생김.
+
+### (2) Imgur에 업로드
+
+1. 브라우저에서 [https://imgur.com/upload](https://imgur.com/upload) 연다.
+2. 방금 저장한 PNG를 **끌어다 놓기** (또는 "New post" → 파일 선택).
+3. 업로드가 끝나면 그림 위에서 **우클릭 → "이미지 주소 복사"** (또는 "Copy image address").
+
+✅ **성공 화면**: 클립보드에 아래처럼 **https 로 시작**하는 주소가 복사됨.
+
+```text
+https://i.imgur.com/xxxxxxxx.png
+```
+
+> ⚠️ `http://` 만 있거나, 페이지 주소(`imgur.com/a/...`)가 아니라 **직접 그림 주소**(`i.imgur.com/....png`) 인지 확인합니다.
+
+### (3) 캡처 팁 (나중에 화면이 예쁘게 나오게)
+
+- PDF 여백이 너무 크면 도면이 작아 보입니다. **도면+범례만** 최대한 타이트하게 캡처.
+- 회색 바탕 PDF는 사이트에서 **흰 배경**으로 맞춰 보이도록 이미 처리되어 있습니다. (냉장고 사진은 별도 규칙)
+
+---
+
+## 8-9. `optionsCatalog.js`에 URL 붙이기
+
+### (1) 파일 열기
+
+1. Cursor 왼쪽 파일 트리 → **`src/optionsCatalog.js`** 클릭.
+2. `Command + F` 로 평형 키 검색 (예: `59A`).
+
+### (2) 평면도 1줄 넣기
+
+해당 평형 블록 **맨 끝 쉼표 앞**에 `floorPlan` 을 추가하거나 수정합니다.
+
+```js
+{key:'59A', name:'59㎡A', opts:[ /* ... */ ],
+  ac:6400000, vent:1200000, dual:true,
+  floorPlan:'https://i.imgur.com/UW6y8Yf.png',
+  fridgeBaseImg:'https://i.imgur.com/Wwqgatz.png',
+  fridgeImg:'https://i.imgur.com/CUL8p92.png'},
+```
+
+> 작은따옴표 `'` 로 감싸고, 주소 끝에 **쉼표** 있는지 확인.
+
+### (3) 옵션 비교 그림 2줄 넣기 (주방·붙박이·공간)
+
+PDF에 **미선택형 / 선택형** 그림이 있는 옵션만 넣습니다.
+
+```js
+{id:'kitchen', cat:'주방 마감 및 가구 특화', label:'...', base:'...', price:4500000,
+  baseImg:'https://i.imgur.com/y8vaEXd.png',
+  img:'https://i.imgur.com/ukypmcj.png',
+  notes:[ /* ... */ ]},
+```
+
+| 필드 | 의미 |
+|------|------|
+| `baseImg` | 왼쪽 칸 — **기본 미선택형** 그림 |
+| `img` | 오른쪽 칸 — **유상 선택형** 그림 |
+
+### (4) 냉장고 (가전) 그림
+
+여러 평형이 **같은 냉장고 사진**을 쓰면 URL을 **그대로 복사**해 넣어도 됩니다.
+
+```js
+fridgeBaseImg:'https://i.imgur.com/Wwqgatz.png',
+fridgeImg:'https://i.imgur.com/CUL8p92.png',
+```
+
+### (5) 저장 → GitHub에 올리기
+
+1. `Command + S` 저장.
+2. Cursor Source Control(왼쪽 가지 모양) → **Commit** → **Push** (2·3장에서 했던 것과 동일).
+3. GitHub Actions 배포가 끝난 뒤(16장) 사이트에서 확인.
+
+> 🎯 **Cursor에 그대로 복사** (한 타입 일괄 반영할 때)  
+> ```
+> @optionsCatalog.js 에서 key가 '52C' 인 타입에 아래 URL을 넣어줘.
+> - floorPlan: https://i.imgur.com/eSeJZFl.png
+> - (해당 opts 중 space 옵션에) baseImg: ..., img: ...
+> 냉장고 URL은 건드리지 마. 문법(쉼표·따옴표) 깨지지 않게 Apply.
+> ```
+
+---
+
+## 8-10. 화면에서 확인하기
+
+### (1) 로컬에서 먼저 보기
+
+터미널은 **반드시 프로젝트 폴더**에서 실행합니다.
+
+```bash
+cd /Users/dongwoolim/yyc-options
+npm run dev
+```
+
+브라우저에 나온 주소(보통 `http://localhost:5173`) → 입주민 검증 통과 → 해당 평형 선택.
+
+✅ **성공 화면**
+
+1. **맨 위** 흰 카드 안에 평면도가 보인다 (잘리지 않고, 좌우 회색 띠 없음).
+2. **주방 마감 및 가구 특화 / 붙박이장 / 공간(드레스룸) 특화** 카드에 **왼쪽·오른쪽** 그림 2칸이 보인다.
+3. **가전(냉장고)** 는 맨 아래 — 평면도·주방 비교 그림만 `CatalogImage` 로 여백 정리 (냉장고는 원본 그대로, 정상).
+
+[스크린샷: 평면도 + 2열 옵션 비교 + 냉장고 구역]
+
+### (2) 19개 타입 점검표 (운영용)
+
+| 확인 | 타입 키 |
+|------|---------|
+| ☐ | 43, 48A, 48B, 52A, 52B, 52C, 55A, 55B |
+| ☐ | 59A, 59B, 59C, 59D, 59E, 59F |
+| ☐ | 65A, 65B, 68, 79, 84 |
+
+각 타입마다: `floorPlan` 있음 → 비교 그림 필요한 카테고리만 `baseImg`/`img` 있음.
+
+### (3) 선택: 그림 파일을 프로젝트에 박아 두기 (고급)
+
+인터넷(Imgur) 대신 **내 서버에 파일**로 두고 싶을 때만:
+
+```bash
+cd /Users/dongwoolim/yyc-options
+npm run images:normalize
+```
+
+- 냉장고 URL은 **자동 제외**됩니다.
+- `public/images/catalog/` 에 저장되고, `optionsCatalog.js` 주소가 바뀝니다.
+- **Imgur에서 받기 실패**하면 이 명령은 안 됩니다. 그때는 8-8~8-9(Imgur)만 쓰면 됩니다.
+
+---
+
+## 8-11. 이미지 관련 자주 나는 에러
+
+| 화면 | 원인 | 해결 |
+|------|------|------|
+| `npm error ENOENT package.json` | 홈 폴더(`~`)에서 `npm run dev` 실행 | `cd /Users/dongwoolim/yyc-options` 후 다시 실행 |
+| 평면도 깨진 아이콘 🖼 | URL 오타 / Imgur 삭제 | 브라우저 새 탭에 URL 붙여 넣어 그림이 뜨는지 확인 |
+| 옵션 카드에 그림 칸 없음 | `baseImg`·`img` 둘 다 없음 | PDF에 그림 없으면 정상. 있으면 8-9대로 추가 |
+| 주방만 글자, 그림 없음 | 카테고리명이 `주방 마감 특화` (가구 없음) | 2열 그림은 **`주방 마감 및 가구 특화`** 등에만 표시 |
+| 평면도만 너무 작고 여백 많음 | PDF 캡처 여백이 큼 | 8-8에서 도면을 더 타이트하게 다시 캡처 |
+| 배포 후에도 옛 그림 | 캐시 / Actions 미완료 | 시크릿 창 + Actions 초록 ✅ 확인 후 재접속 |
+
+---
+
+## 8-12. 8장(이미지 포함) 완료 체크리스트
+
+- [ ] 19개 타입 모두 `floorPlan` URL 있음
+- [ ] PDF에 있는 비교 그림은 `baseImg` / `img` 쌍으로 들어감
+- [ ] Imgur 주소가 `https://i.imgur.com/xxxx.png` 형식
+- [ ] 로컬 `npm run dev` 로 2~3개 타입(작은 평형·큰 평형·59A) 눈으로 확인
+- [ ] Push 후 GitHub Pages에서도 동일하게 보임
 
 ---
 
 📌 **다음 장 미리보기**  
-9장에선 "신청서 작성" 클릭 후의 **개인정보 입력 폼**(주민번호 앞6, 주소, 이메일, 비상연락처 등)을 만듭니다.
+9장에선 **「신청서 확인 →」** 이후 **`step 2`** — 옵션 요약·**서명**·**신청완료** 화면을 다룹니다.
