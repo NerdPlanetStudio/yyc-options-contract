@@ -14,6 +14,7 @@
     "manual:merge": "node scripts/build-manual.mjs",
     "manual:html": "node scripts/build-html.mjs",
     "manual:build": "npm run manual:merge && npm run manual:html",
+    "images:normalize": "node scripts/normalize-catalog-images.mjs",
     "manual:pdf": "npm run manual:build && node scripts/build-pdf.mjs"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "marked": "^13.0.0",
+    "sharp": "^0.34.5",
     "supabase": "^2.98.2",
     "vite": "^8.0.10"
   }

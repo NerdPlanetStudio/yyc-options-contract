@@ -9,6 +9,7 @@ import {
   accumulateCsvOptionAmounts
 } from "./applicationCsvShared.js";
 import { TYPES, getAppliances } from "./optionsCatalog.js";
+import { CatalogImage } from "./CatalogImage.jsx";
 import {
   TEMPLATE_PIVOT_SHEET_NAMES,
   resolveTemplatePivotSheetName,
@@ -1094,33 +1095,88 @@ async function downloadApplicationsXlsx(rows) {
 
 const fmt = (n) => String.fromCharCode(8361) + n.toLocaleString('ko-KR');
 
-const OPT_CAT_LIVING = '거실마감재 특화';
-const OPT_CAT_BATH = '욕실마감재 특화';
-/** optionsCatalog opts 순서의 카테고리 목록 — 옵션 신청 카드와 동일하게 욕실을 거실 직후로 */
-function getOrderedOptionCategories(opts) {
+/**
+ * 원본 옵션신청서 PDF(`docs/reference/yyc-options-application-form-260406-final.pdf`) 타입별 1·2페이지
+ * `▣ … 옵션 선택` 순서를 합친 카드 스크롤 순서. 가전 블록은 UI에서 항상 맨 아래(별도 처리).
+ * (인쇄 미리보기 1면 우측 텍스트 블록은 기존처럼 PRINT_TEXT 카테고리만 필터 — PDF 1면과 완전 동일하진 않을 수 있음.)
+ */
+const TYPE_OPTION_CARD_ORDER = {
+  '43': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화'],
+  '48A': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화'],
+  '48B': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화'],
+  '52A': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화', '공간(드레스룸) 특화'],
+  '52B': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화', '공간(드레스룸) 특화'],
+  '52C': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화', '공간(드레스룸) 특화'],
+  '55A': ['거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '55B': ['거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '59A': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '59B': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '59C': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '59D': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '59E': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 특화', '붙박이장'],
+  '59F': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 특화', '붙박이장'],
+  '65A': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화', '공간(드레스룸) 특화'],
+  '65B': ['거실마감재 특화', '주방 마감 특화', '붙박이장', '욕실마감재 특화', '공간(드레스룸) 특화'],
+  '68': ['거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '79': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 및 가구 특화', '붙박이장', '공간(드레스룸) 특화'],
+  '84': ['벽 마감재 특화', '거실마감재 특화', '욕실마감재 특화', '주방 마감 특화', '붙박이장'],
+};
+
+const PDF_OPTION_CAT_FALLBACK = [
+  '벽 마감재 특화',
+  '거실마감재 특화',
+  '욕실마감재 특화',
+  '주방 마감 특화',
+  '주방 마감 및 가구 특화',
+  '붙박이장',
+  '공간(드레스룸) 특화',
+];
+
+function getOrderedOptionCategories(typeKey, opts) {
   if (!opts?.length) return [];
-  const cats = [];
-  const seen = new Set();
-  for (const o of opts) {
-    if (!seen.has(o.cat)) {
-      seen.add(o.cat);
-      cats.push(o.cat);
+  const firstIdx = new Map();
+  for (let i = 0; i < opts.length; i++) {
+    const c = opts[i].cat;
+    if (!firstIdx.has(c)) firstIdx.set(c, i);
+  }
+  const present = new Set(firstIdx.keys());
+  const template = TYPE_OPTION_CARD_ORDER[typeKey];
+  if (template) {
+    const out = [];
+    const used = new Set();
+    for (const c of template) {
+      if (present.has(c)) {
+        out.push(c);
+        used.add(c);
+      }
     }
+    for (let i = 0; i < opts.length; i++) {
+      const c = opts[i].cat;
+      if (!used.has(c)) {
+        out.push(c);
+        used.add(c);
+      }
+    }
+    return out;
   }
-  const li = cats.indexOf(OPT_CAT_LIVING);
-  const bi = cats.indexOf(OPT_CAT_BATH);
-  if (li !== -1 && bi !== -1 && bi !== li + 1) {
-    const rest = cats.filter((c) => c !== OPT_CAT_BATH);
-    rest.splice(rest.indexOf(OPT_CAT_LIVING) + 1, 0, OPT_CAT_BATH);
-    return rest;
-  }
-  return cats;
+  const keys = [...firstIdx.keys()];
+  const rank = (cat) => {
+    const p = PDF_OPTION_CAT_FALLBACK.indexOf(cat);
+    return p === -1 ? 900 + firstIdx.get(cat) : p;
+  };
+  keys.sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
+    return firstIdx.get(a) - firstIdx.get(b);
+  });
+  return keys;
 }
 
 /** 선택 항목을 옵션 카드(및 계약서 텍스트 블록) 순서와 동일하게 정렬 — 가전은 항상 맨 마지막 */
 function orderedSelectedList(typeData, allOpts, sel) {
   if (!typeData) return [];
-  const order = getOrderedOptionCategories(typeData.opts);
+  const order = getOrderedOptionCategories(typeData.key, typeData.opts);
   const byCat = new Map();
   for (const o of allOpts) {
     if (!byCat.has(o.cat)) byCat.set(o.cat, []);
@@ -1184,8 +1240,8 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
           <th className="aft-h"><span className="af-ls">유상</span> 선택형</th>
         </tr></thead><tbody>
           {(opt.baseImg||opt.img)&&<tr>
-            <td className="af-tc">{opt.baseImg?<img src={opt.baseImg} className="af-fw"/>:'—'}</td>
-            <td className="af-tc">{opt.img?<img src={opt.img} className="af-fw"/>:'—'}</td>
+            <td className="af-tc">{opt.baseImg?<CatalogImage src={opt.baseImg} className="af-fw"/>:'—'}</td>
+            <td className="af-tc">{opt.img?<CatalogImage src={opt.img} className="af-fw"/>:'—'}</td>
           </tr>}
           <tr><td>{opt.base||'—'}</td><td>{opt.label}</td></tr>
           <tr><td className="af-pr">—</td><td className="af-pr">공급금액 : {f(opt.price)}</td></tr>
@@ -1207,7 +1263,7 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
       </React.Fragment>
     );
   };
-  const orderedCats = getOrderedOptionCategories(typeData.opts);
+  const orderedCats = getOrderedOptionCategories(typeData.key, typeData.opts);
   const p1TextOpts = orderedCats
     .filter((cat) => PRINT_TEXT_OPTION_CATS.has(cat))
     .map((cat) => typeData.opts.find((o) => o.cat === cat))
@@ -1267,7 +1323,7 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
             <div className="af-hdr-sub">청량리역 요진 와이시티<br/>멀티플러스 옵션 신청서</div>
             <div className="af-hdr-info"><div className="af-hdr-cell">{dong||'___'}동</div><div className="af-hdr-cell">{ho||'___'}호</div></div>
           </div>
-          {typeData.floorPlan&&<div className="af-fp"><img src={typeData.floorPlan} alt="평면도"/></div>}
+          {typeData.floorPlan&&<div className="af-fp"><CatalogImage src={typeData.floorPlan} alt="평면도"/></div>}
           {p1TextOpts.map((opt) => (
             <TextOpt key={opt.id} opt={opt} />
           ))}
@@ -1286,8 +1342,8 @@ function ApplicationFormPrint({ typeData, sel, signData, contractor, dong, ho })
                 <React.Fragment key={opt.id}>
                   {(opt.baseImg || opt.img) && (
                     <tr>
-                      <td className="af-tc">{opt.baseImg ? <img src={opt.baseImg} className="af-fw" alt="" /> : "—"}</td>
-                      <td className="af-tc">{opt.img ? <img src={opt.img} className="af-fw" alt="" /> : "—"}</td>
+                      <td className="af-tc">{opt.baseImg ? <CatalogImage src={opt.baseImg} className="af-fw" alt="" /> : "—"}</td>
+                      <td className="af-tc">{opt.img ? <CatalogImage src={opt.img} className="af-fw" alt="" /> : "—"}</td>
                     </tr>
                   )}
                   <tr style={idx > 0 ? { borderTop: "1pt solid #666" } : undefined}>
@@ -1690,18 +1746,18 @@ export function App() {
   }
 
   if (step === 1) {
-    const cats = getOrderedOptionCategories(typeData.opts);
+    const cats = getOrderedOptionCategories(typeKey, typeData.opts);
     if (allOpts.some((o) => o.cat === '가전 옵션')) cats.push('가전 옵션');
     const catMap = {};
     allOpts.forEach(o => { if(!catMap[o.cat]){catMap[o.cat]=[];} catMap[o.cat].push(o); });
     return (
       <>
-      <div className={'container'+(typeKey==='55A'||typeKey==='59A'?' option-page--cmp-no-upscale':'')}>
+      <div className="container">
         <header className="header-bar">
           <span className="header-info">{typeData.name} | {dong}동 {ho}호 | {contractor}</span>
           <span className="header-total">합계: {fmt(total)}</span>
         </header>
-        <div className="plan-box">{typeData.floorPlan?<img src={typeData.floorPlan} alt={typeData.name}/>:<div className="plan-ph"><span>🏠</span>{typeData.name} 평면도</div>}</div>
+        <div className="plan-box">{typeData.floorPlan?<CatalogImage src={typeData.floorPlan} alt={typeData.name}/>:<div className="plan-ph"><span>🏠</span>{typeData.name} 평면도</div>}</div>
         <div className="option-layout">
           <div className="option-main">
             {cats.map(cat => {
@@ -1756,7 +1812,7 @@ export function App() {
                   <div className="cmp-card">
                     <div className="cmp-head">▣ {cat} 옵션 선택</div>
                     <div className="cmp-labels"><div className="cmp-lbl base">기본 미선택형</div><div className="cmp-lbl sel">유상 선택형</div></div>
-                    {showCmpImgs && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<img src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<img src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
+                    {showCmpImgs && (<div className="cmp-imgs"><div className="cmp-img">{imgOpt.baseImg?<CatalogImage src={imgOpt.baseImg} alt="미선택형"/>:<div className="img-ph">📷 미선택형</div>}</div><div className="cmp-img">{imgOpt.img?<CatalogImage src={imgOpt.img} alt="선택형"/>:<div className="img-ph">📷 선택형</div>}</div></div>)}
                     {catOpts.map(opt => {
                       const isOn = sel[opt.id] !== undefined;
                       const isExcl = opt.group && allOpts.some(o => o.group===opt.group && o.id!==opt.id && sel[o.id]!==undefined);

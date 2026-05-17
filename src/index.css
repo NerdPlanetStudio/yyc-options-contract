@@ -163,8 +163,24 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .summary-notes{margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e2e8f0}
 .summary-notes p{font-size:.75rem;color:#64748b;font-weight:500;margin-bottom:.25rem}
 .plan-box{background:#fff;border-radius:.75rem;padding:1.25rem;margin-bottom:1rem;box-shadow:0 1px 3px rgba(0,0,0,.08);text-align:center}
-.plan-box img{max-width:100%;border-radius:.5rem}
-.plan-ph{background:#f8fafc;border:2px dashed #cbd5e1;border-radius:.5rem;padding:2rem 1rem;color:#64748b;font-size:.875rem;font-weight:500}
+/* 평면도: 옵션 열 전체 너비 사용(32rem 제한 제거), 가로형 도면이 크게 보이도록 */
+.plan-box img{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:auto;
+  max-height:min(40rem,58vh);
+  min-height:0;
+  margin:0 auto;
+  object-fit:contain;
+  object-position:center;
+  border-radius:.5rem;
+  background:#fff
+}
+@media (max-width:768px){
+  .plan-box img{max-height:min(28rem,42vh);min-height:12rem}
+}
+.plan-ph{background:#fff;border:2px dashed #cbd5e1;border-radius:.5rem;padding:2rem 1rem;color:#64748b;font-size:.875rem;font-weight:500}
 .plan-ph span{display:block;font-size:2rem;margin-bottom:.25rem}
 .cmp-card{background:#fff;border:1px solid #e2e8f0;border-radius:.75rem;margin-bottom:1.25rem;overflow:hidden;transition:all .2s}
 .cmp-card.on{border-color:#1e3a5f;box-shadow:0 0 0 1px #1e3a5f}
@@ -175,56 +191,45 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .cmp-lbl.base{background:#f1f5f9;color:#64748b}
 .cmp-lbl.sel{background:#fef3c7;color:#92400e}
 .cmp-imgs{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #e2e8f0}
-/* 2열 비교 — 기본: 동일 높이 + cover */
+/* 2열 비교 — 이미지 영역 배경은 흰색(라벨만 회색/노랑 구분) */
 .cmp-imgs .cmp-img{
   padding:0;
   display:block;
-  background:#fff;
   overflow:hidden;
   box-sizing:border-box;
 }
+.cmp-imgs .cmp-img{background:#fff}
 .cmp-img+.cmp-img{border-left:1px solid #e2e8f0}
-.cmp-imgs .cmp-img img{
-  width:100%;
-  height:17.5rem;
-  max-height:17.5rem;
-  object-fit:cover;
-  object-position:center;
-  display:block;
-}
-.img-ph{background:#f8fafc;border:1.5px dashed #d1d5db;border-radius:.375rem;padding:1.25rem .5rem;color:#b0b8c4;font-size:.75rem}
-.cmp-imgs .img-ph{
-  margin:.375rem;
-  width:calc(100% - 0.75rem);
-  height:17.5rem;
-  min-height:17.5rem;
-  max-height:17.5rem;
-  box-sizing:border-box;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-/* 55㎡A·59㎡A만: 저해상도 도면 업스케일 방지(contain), 여백은 라벨톤 */
-.option-page--cmp-no-upscale .cmp-imgs .cmp-img{
+.img-ph{background:#fff;border:1.5px dashed #d1d5db;border-radius:.375rem;padding:1.25rem .5rem;color:#b0b8c4;font-size:.75rem}
+/* 옵션 카드(.cmp-card) 2열 비교 — 전 타입 contain·동일 박스(59A 기준). 가전(.app-table)은 별도 규칙 */
+.cmp-card .cmp-imgs .cmp-img{
   padding:.5rem;
   display:flex;
   align-items:center;
   justify-content:center;
-  background:#f1f5f9;
   min-height:12rem;
+  box-sizing:border-box;
 }
-.option-page--cmp-no-upscale .cmp-imgs .cmp-img img{
+.cmp-card .cmp-imgs .cmp-img img{
   max-width:100%;
   max-height:15.5rem;
   width:auto;
   height:auto;
   object-fit:contain;
+  object-position:center;
+  display:block;
+  background:#fff;
 }
-.option-page--cmp-no-upscale .cmp-imgs .img-ph{
+.cmp-card .cmp-imgs .img-ph{
+  margin:.375rem;
   width:calc(100% - 1rem);
   height:auto;
   min-height:10rem;
   max-height:15.5rem;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   flex:0 1 auto;
 }
 .cmp-cols{display:grid;grid-template-columns:1fr 1fr}
@@ -258,6 +263,34 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .cmp-notes{padding:.375rem 1rem .5rem;border-top:1px solid #f1f5f9}
 .cmp-note{font-size:.6875rem;color:#64748b;font-weight:500;line-height:1.5}
 .app-item.on .cmp-col:last-child{background:#eff6ff;padding:.75rem 1rem;border-radius:0 0 .75rem 0}
+/* 가전 테이블 내 2열(냉장고패키지 등): 세로·가로 비율이 달라도 동일 박스·contain으로 좌우 맞춤 */
+.app-table .cmp-imgs .cmp-img{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  max-height:12.5rem;
+  min-height:10rem;
+  padding:.375rem .25rem;
+  box-sizing:border-box;
+}
+/* 가전 2열 이미지: 옵션 카드용 유상 노랑 배경 제외 — 제품 사진은 중립 톤 */
+.app-table .cmp-imgs .cmp-img{background:#fff}
+.app-table .cmp-imgs .cmp-img img{
+  width:auto;
+  max-width:100%;
+  height:auto;
+  max-height:11.25rem;
+  min-height:0;
+  object-fit:contain;
+  object-position:center;
+}
+.app-table .cmp-imgs .img-ph{
+  margin:.25rem auto;
+  width:calc(100% - 0.5rem);
+  height:11.25rem;
+  min-height:11.25rem;
+  max-height:11.25rem;
+}
 .admin-wrap{min-height:100vh;background:#f1f5f9;color:#1e293b;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;padding:1rem;box-sizing:border-box}
 .admin-shell{max-width:1200px;margin:0 auto}
 .admin-top{background:linear-gradient(135deg,#1e3a5f 0%,#2c5282 100%);color:#fff;text-align:center;padding:2.75rem 1.5rem;border-radius:1rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -317,20 +350,22 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   .header-bar{flex-direction:column;gap:.25rem;text-align:center}
   .cmp-cols,.cmp-imgs,.cmp-labels{grid-template-columns:1fr}
   .cmp-col+.cmp-col,.cmp-img+.cmp-img{border-left:none;border-top:1px solid #e2e8f0}
-  .cmp-imgs .cmp-img img,.cmp-imgs .img-ph{height:13rem;max-height:13rem;min-height:13rem}
-  .option-page--cmp-no-upscale .cmp-imgs .cmp-img{min-height:10rem;padding:.375rem}
-  .option-page--cmp-no-upscale .cmp-imgs .cmp-img img{
+  .cmp-card .cmp-imgs .cmp-img{min-height:10rem;padding:.375rem}
+  .cmp-card .cmp-imgs .cmp-img img{
     height:auto;
     min-height:0;
     max-height:11.5rem;
     width:auto;
     object-fit:contain;
   }
-  .option-page--cmp-no-upscale .cmp-imgs .img-ph{
+  .cmp-card .cmp-imgs .img-ph{
     height:auto;
     min-height:8rem;
     max-height:11.5rem;
   }
+  .app-table .cmp-imgs .cmp-img{max-height:10rem;min-height:8.5rem;padding:.25rem}
+  .app-table .cmp-imgs .cmp-img img{height:auto;max-height:9rem;min-height:0}
+  .app-table .cmp-imgs .img-ph{height:9rem;min-height:9rem;max-height:9rem}
   .app-head{display:none}
   .app-sub{grid-template-columns:1fr;gap:.25rem}
   .admin-filters{grid-template-columns:1fr}
@@ -432,7 +467,17 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .af-hdr-info{display:flex;gap:2mm}
 .af-hdr-cell{background:#fff;color:#000;padding:1.5mm 3mm;border-radius:1mm;font-size:8pt;font-weight:700;min-width:16mm;text-align:center}
 .af-fp{margin:2mm 0;text-align:center;border:.5pt solid #ddd;border-radius:1mm;padding:2mm}
-.af-fp img{max-width:100%;max-height:65mm}
+.af-fp img{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:65mm;
+  max-height:65mm;
+  margin:0 auto;
+  object-fit:contain;
+  object-position:center;
+  background:#fff
+}
 .af-at{width:100%;border-collapse:collapse;border:.5pt solid #999}
 .af-at th,.af-at td{border:.5pt solid #999;padding:1.5mm 2mm;font-size:7.5pt;vertical-align:top}
 .af-at th{background:#1e3a5f;color:#fff;font-weight:700;font-size:7.5pt;text-align:center}
@@ -462,7 +507,17 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
 .app-form-header-info{display:flex;gap:2mm}
 .app-form-header-info .info-cell{background:#fff;color:#000;padding:1.5mm 3mm;border-radius:1mm;font-size:9pt;font-weight:700;min-width:14mm;text-align:center}
 .app-form-floor-plan{text-align:center;background:#fff;padding:2mm;border:.5pt solid #ddd;border-radius:1mm;margin-bottom:2mm}
-.app-form-floor-plan img{max-width:100%;max-height:65mm}
+.app-form-floor-plan img{
+  display:block;
+  width:100%;
+  max-width:100%;
+  height:65mm;
+  max-height:65mm;
+  margin:0 auto;
+  object-fit:contain;
+  object-position:center;
+  background:#fff
+}
 .app-form-app-table{width:100%;border-collapse:collapse;border:.5pt solid #999;table-layout:fixed}
 .app-form-app-table th,.app-form-app-table td{border:.5pt solid #999;padding:1.5mm 2mm;font-size:8pt;vertical-align:middle}
 .app-form-app-table th{background:#1e3a5f;color:#fff;font-weight:700;font-size:8.5pt;text-align:center}
@@ -706,7 +761,13 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;backgr
   html.yyc-print-source-page .af-hdr-sub,
   html:has(.app-form-print) .af-hdr-sub{font-size:9pt!important}
   html.yyc-print-source-page .af-fp img,
-  html:has(.app-form-print) .af-fp img{max-height:36mm!important}
+  html:has(.app-form-print) .af-fp img{
+    height:36mm!important;
+    max-height:36mm!important;
+    min-height:36mm!important;
+    object-fit:contain!important;
+    object-position:center!important
+  }
   html.yyc-print-source-page .af-at-img,
   html:has(.app-form-print) .af-at-img{max-height:28mm!important}
   html.yyc-print-source-page .aft img,
