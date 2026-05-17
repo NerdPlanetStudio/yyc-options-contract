@@ -2127,7 +2127,8 @@ npm run dev
 | **`getAppliances(t)`** | "가전(인덕션·냉장고·비데 등) 목록 — 평형마다 `ac`·`vent`·`dual` 가격만 다름" |
 | **`step`** | "지금 몇 번째 화면인지 번호 (0=입력, 1=옵션, 2=서명·제출)" |
 | **`sel`** | "선택한 옵션 id → 가격 맵 (엑셀 SUMIF용 메모)" |
-| **`CatalogImage`** | "평면도·비교 그림 여백을 흰색으로 맞춰 주는 표시 부품 (코드에 이미 있음)" |
+| **`CatalogImage`** | "평면도·2열 비교 그림 표시 — Imgur 로드 후 **밝은 여백 trim** + 흰 패딩 (`catalogImage.js`, 냉장고 URL 제외)" |
+| **`cmp-card` CSS** | "옵션 비교 카드 높이·`object-fit: contain` — **전 평형 동일** (가전 `.app-table` 은 별도)" |
 
 ### 화면 흐름 (지금 프로젝트 기준)
 
@@ -4084,225 +4085,196 @@ Storage URL (워크플로 내부):
 
 <div class='page-break'></div>
 
-# 19장. 자주 만나는 에러 30선 — 빠른 해결 카탈로그
+# 19장. 자주 만나는 에러 — 빠른 해결 카탈로그
 
-> **이 장에서 완성하는 것**  
-> 운영하다 만날 거의 모든 빨간 글씨를 **"이 화면이면 → 이거 1줄"** 로 빠르게.  
-> 새 사고가 나면 이 장 한 번 훑고 → 안 풀리면 18장 INCIDENT_RUNBOOK → 그래도면 Cursor.  
->
-> **사용법**: 검색(Cmd+F)에 에러 키워드만 치면 됩니다.  
-> **난이도**: ★ (지식 사전)
+> 운영 중 빨간 메시지 → **Cmd+F** 로 검색 → 안 풀리면 `docs/INCIDENT_RUNBOOK.md` → Cursor.  
+> **2026 현행 앱**: step 0~2, `#/admin`, `selected_options`, `YYC-YYYYMMDD001`.
 
 ---
 
-## 19-1. 화면 (Frontend / 브라우저)
+## 19-1. 화면 (Frontend)
 
-### F-01. 사이트 흰 화면 (콘솔에 빨간 줄)
-- **원인**: `vite.config.js` 의 `base` 가 리포 경로와 다름.  
-- **해결**: `base: '/yyc-options/'`. 16-4 기준대로 push.
+### F-01. 흰 화면
+- **원인**: GitHub Pages `base` ≠ 실제 URL 경로.  
+- **해결**: `vite.config.js` + Actions `VITE_BASE=/${{ repository.name }}/`. 16장.
 
-### F-02. `Failed to fetch` (제출/다운로드 시)
-- **원인**: 인터넷 끊김 / Supabase 도메인 차단 / Edge Function 미배포.  
-- **해결**: 인터넷 → Supabase Status → `supabase functions list` 로 함수 존재 확인.
+### F-02. `Failed to fetch`
+- **원인**: 네트워크 / Supabase 장애 / 함수 미배포.  
+- **해결**: status.supabase.com · Edge Functions 목록.
 
-### F-03. 콘솔 `Invalid API key`
-- **원인**: `VITE_SUPABASE_ANON_KEY` 오타·미반영.  
-- **해결**: GitHub Secret 다시 + Actions 재실행. 로컬은 dev 재시작.
+### F-03. `Invalid API key`
+- **원인**: anon 키 오타·Secret 미반영.  
+- **해결**: GitHub Secrets + Actions Re-run · 로컬 `.env.local` + dev 재시작.
 
-### F-04. CORS 에러 (`No 'Access-Control-Allow-Origin'`)
-- **원인**: Supabase URL 끝 `/` / Edge Function CORS 헤더 누락.  
-- **해결**: `.env`의 URL은 `.co` 까지만. 함수 `corsHeaders` 정의 확인.
+### F-04. CORS
+- **원인**: Supabase URL 형식 / Edge CORS.  
+- **해결**: URL 끝 `/` 제거 · 함수 `Access-Control-Allow-*` 헤더.
 
-### F-05. `import.meta.env.VITE_*` 가 undefined
-- **원인**: dev 서버 재시작 안 함 / `.env.local` 위치 잘못.  
-- **해결**: 프로젝트 루트에 `.env.local` → Ctrl+C → `npm run dev`.
+### F-05. `VITE_*` undefined
+- **원인**: env 파일 위치·서버 미재시작.  
+- **해결**: 루트 `.env.local` · `npm run dev` 재실행.
 
-### F-06. 폰에서 서명할 때 페이지 같이 스크롤
-- **원인**: `touch-action` 미설정.  
-- **해결**: 캔버스 `style={{ touchAction: 'none' }}`. 10-4 표 참고.
+### F-06. 서명 시 페이지 스크롤
+- **해결**: 캔버스 `touchAction: 'none'` (10장).
 
-### F-07. 이메일 검증이 너무 헐거움 (`a@b` 통과)
-- **원인**: 정규식 단순.  
-- **해결**: 표준 RFC 정규식으로 교체. 9-5 표 참고.
+### F-07. 게이트에서 막힘 / 평형 안 맞음
+- **원인**: 등록부 없음·`type_key` 불일치·뒷4자리 오타.  
+- **해결**: 5·7장 · `verify_yyc_resident` SQL 직접 호출.
 
-### F-08. 다음 버튼 영원히 회색
-- **원인**: trim 미적용 또는 검증 조건 OR/AND 버그.  
-- **해결**: 4칸 모두 trim 후 비어있는지 확인. Cursor에 "현재 활성 조건 디버그 출력 후 고쳐줘".
+### F-08. 「옵션 계약 신청」 버튼 비활성
+- **원인**: step 0 네 칸·평형 미선택.  
+- **해결**: 동·호·이름·휴대폰 뒷4자리·평형 버튼.
 
-### F-09. 평면도·옵션 그림 안 보임 / `npm ENOENT package.json`
-- **원인**: Imgur URL 오타·삭제, 또는 **홈 폴더에서** `npm run dev` 실행.  
-- **해결**: 8장 **8-8~8-11** 절차. `cd .../yyc-options` 후 `npm run dev`. URL을 새 탭에 붙여 그림이 뜨는지 확인.
+### F-09. 그림 안 보임 / `ENOENT package.json`
+- **원인**: Imgur URL · 홈에서 `npm run dev`.  
+- **해결**: 8장 · `cd yyc-options`.
 
----
+### F-10. `?admin=1` 로 관리자 안 열림
+- **원인**: 구버전 주소.  
+- **해결**: **`#/admin`** (13장).
 
-## 19-2. 데이터베이스 (Postgres / RPC / RLS)
-
-### D-01. `permission denied for function ...`
-- **원인**: `GRANT EXECUTE ... TO authenticated;` 누락.  
-- **해결**: 17-2 SQL 끝부분 GRANT 줄 다시 Run.
-
-### D-02. `function ... does not exist`
-- **원인**: `next_yyc_receipt_no.sql` / `submit_application.sql` 미실행.  
-- **해결**: 11-3 순서대로 Run. RPC 인자는 `{ payload: ... }` (키 이름 `payload`).
-
-### D-03. `duplicate key value violates unique constraint "applications_unique_per_unit"`
-- **원인**: (선택) 동·호 UNIQUE 제약 + 같은 호 재신청.  
-- **해결**: 정상 차단. 안내 문구 추가 또는 관리자 초기화.
-
-### D-04. `null value in column "..." violates not-null constraint`
-- **원인**: 옛 테이블 스키마(`email`, `resident_id_first6` 등) + 새 앱 payload.  
-- **해결**: 11-2 테이블 정의로 맞추기. `signature_data_url`·`receipt_no` 빈값 여부 확인.
-
-### D-05. `column "selected_options" does not exist` (또는 `options`)
-- **원인**: DB는 예전 칼럼명, 앱은 `selected_options`.  
-- **해결**: 11-2·`submit_application.sql` 기준으로 마이그레이션.
-
-### D-06. anon 으로도 `applications` 가 SELECT 됨
-- **원인**: RLS OFF 또는 정책에 USING (true).  
-- **해결**: 17-2 그대로 다시 Run + 정책에 `is_admin()` 들어갔는지.
-
-### D-07. 관리자 로그인 후에도 표가 0건
-- **원인**: `app_admins` 에 본인 이메일 없음.  
-- **해결**: `INSERT INTO app_admins(email) VALUES('admin@admin.com');`.
-
-### D-08. 접수번호가 `YYC-2026-0001` 같은 옛 형식
-- **원인**: 옛 `next_yyc_receipt_no` RPC.  
-- **해결**: `supabase/sql/next_yyc_receipt_no.sql` 전체 다시 Run → `YYC-YYYYMMDD001` 형식.
-
-### D-09. 초기화 후에도 카운터 안 줄어듦
-- **원인**: 옛 `admin_clear_all_applications` 사용 중.  
-- **해결**: 15-2 SQL 다시 Run.
-
-### D-10. `cannot truncate ... because RLS policy`
-- **원인**: 카운터 테이블 RLS ON.  
-- **해결**: `ALTER TABLE yyc_receipt_counter DISABLE ROW LEVEL SECURITY;`.
-
-### D-11. `verify_yyc_resident` 가 항상 0줄
-- **원인**: 입력값 공백/한자 / 등록부 데이터 다름.  
-- **해결**: 정규화(숫자만/연속공백 1칸) 적용. SQL Editor 에서 직접 호출 시험. 5-5.
-
-### D-12. `permission denied for table app_admins`
-- **원인**: REVOKE 후 정책 없이 SELECT 시도.  
-- **해결**: 17-2 의 `admins_select_admin` 정책이 있는지.
+### F-11. Storage 누적 워크북 다운로드 실패 (관리자)
+- **원인**: `sign-application-workbook` · secrets.  
+- **해결**: 14장 · 응답 필드 `signedUrl`.
 
 ---
 
-## 19-3. Edge Functions / Webhook / Storage
+## 19-2. DB / RPC / RLS
 
-### E-01. Webhook 결과 401
-- **원인**: `WORKBOOK_WEBHOOK_SECRET` 과 헤더 `x-workbook-secret` 불일치.  
-- **해결**: `supabase secrets set` + Webhook Header 둘 다 같은 값.
+### D-01. `permission denied for function`
+- **해결**: `applications_rls_lockdown.sql` GRANT 절.
 
-### E-02. 422 `header mismatch on pivot sheet`
-- **원인**: 엑셀 1행 헤더가 `append-workbook-row/index.ts` 의 `HEADERS` 와 다름.  
-- **해결**: 12-2 표 / `index.ts` 의 `HEADERS` 그대로 1행 수정 후 Storage 재업로드.
+### D-02. function does not exist
+- **해결**: A-2 순서 — `next_yyc_receipt_no.sql`, `submit_application.sql`.
 
-### E-02b. 422 `pivot sheet missing`
-- **원인**: 시트 이름이 `옵션 신청 현황`, `Sheet1 (2)` 가 아님 (예: 예전 교재 `신청서`).  
-- **해결**: 시트 이름 변경 또는 템플릿 교체.
+### D-03. duplicate key (동·호 UNIQUE 있을 때)
+- **해결**: 정상 차단 또는 15장 초기화.
 
-### E-02c. 400 `missing record`
-- **원인**: Webhook 본문에 `record` 없음 / 잘못된 테이블·이벤트.  
-- **해결**: Table=`applications`, Event=**Insert** 만. 11장 INSERT 가 먼저 되는지 확인.
+### D-04. not-null constraint
+- **해결**: 11장 스키마 · `applications_migrate_to_current_schema.sql`.
 
-### E-03. 422 `workbook missing and TEMPLATE_PUBLIC_URL unset`
-- **원인**: 버킷·파일명 오타 / 템플릿 URL 미설정.  
-- **해결**: `WORKBOOK_OBJECT_KEY` = 실제 파일명. `TEMPLATE_PUBLIC_URL` 시크릿 등록.
+### D-05. `column "selected_options" does not exist`
+- **해결**: 11장 마이그레이션 SQL.
 
-### E-04. 500 `storage upload fail`
-- **원인**: 버킷명 오타 또는 권한.  
-- **해결**: `application-workbook` 정확히. service_role 키 정상인지.
+### D-06. anon이 applications 조회됨
+- **해결**: `applications_rls_lockdown.sql` · 17-3 시험.
 
-### E-05. Webhook은 도는데 엑셀이 안 바뀜
-- **원인**: 캐시 / 화면 새로고침 안 함.  
-- **해결**: Storage 새로고침 → 업데이트 시간 확인.
+### D-07. 관리자 목록 0건
+- **해결**: `app_admins` INSERT · `#/admin` 재로그인.
 
-### E-06. `not in a project directory` (CLI)
-- **원인**: 홈 디렉토리에서 실행.  
-- **해결**: `cd /Users/.../yyc-options` 후 다시.
+### D-08. 접수번호 `YYC-2026-0001` 형식
+- **해결**: `next_yyc_receipt_no.sql` 재실행.
 
-### E-07. `verify_jwt` 401
-- **원인**: 함수가 JWT 검사 모드인데 webhook 은 토큰 없음.  
-- **해결**: `--no-verify-jwt` 로 배포 또는 `config.toml` 의 `verify_jwt=false` 확인.
+### D-09. 초기화 후 카운터
+- **해결**: `admin_clear_all_applications.sql`.
 
-### E-08. 다운로드 함수 401/403
-- **원인**: 미로그인 / 화이트리스트 누락.  
-- **해결**: 관리자 로그인 후 시도. `WORKBOOK_RESET_ALLOWED_EMAILS` 에 본인 이메일.
+### D-10. truncate + RLS
+- **해결**: 초기화는 **RPC** 사용(15장). 직접 TRUNCATE 대신.
 
-### E-09. 다운로드는 되는데 1초만에 만료
-- **원인**: 시계 차이.  
-- **해결**: `expires` 60 → 90~120.
+### D-11. verify 항상 실패
+- **해결**: 5장 등록부 · 공백/숫자 정규화.
 
-### E-10. 초기화 후에도 1~155 행 보임
-- **원인**: 템플릿 자체에 샘플 행.  
-- **해결**: 템플릿 엑셀을 헤더 1줄만 두고 다시 push.
+### D-12. app_admins permission denied
+- **해결**: 17장 `admins_select_admin` 정책.
 
-### E-11. Edge Function 배포는 됐는데 Logs 가 비어있음
-- **원인**: Webhook 미연결 / Webhook URL 오타.  
-- **해결**: Webhook URL 끝이 함수명과 정확히 일치하는지.
+### D-13. 상태/메모 저장 실패
+- **해결**: A-3 `admin_memo`, `updated_at` 칼럼 추가.
+
+---
+
+## 19-3. Edge / Webhook / Storage
+
+### E-01. Webhook 401
+- **해결**: `WORKBOOK_WEBHOOK_SECRET` = 헤더 `x-workbook-secret`.
+
+### E-02. 422 header mismatch
+- **해결**: 12장 피벗 `HEADERS` = 엑셀 1행.
+
+### E-02b. pivot sheet missing
+- **해결**: 시트명 `옵션 신청 현황` 또는 `Sheet1 (2)`.
+
+### E-02c. 400 missing record
+- **해결**: Webhook Insert · `applications`.
+
+### E-03. workbook missing
+- **해결**: Storage 업로드 · `TEMPLATE_PUBLIC_URL`.
+
+### E-04. 500 storage upload
+- **해결**: `application-workbook` · service_role.
+
+### E-05. Webhook OK, 엑셀 안 변함
+- **해결**: Storage Updated · 캐시.
+
+### E-06. CLI not in project directory
+- **해결**: `cd yyc-options`.
+
+### E-07. verify_jwt 401 (Edge)
+- **해결**: `--no-verify-jwt` · config.toml.
+
+### E-08. sign 401/403
+- **해결**: `#/admin` 로그인 · `WORKBOOK_RESET_ALLOWED_EMAILS`.
+
+### E-09. signedUrl 만료
+- **해결**: 다시 「엑셀 내려받기」.
+
+### E-10. 초기화 후 샘플 행 많음
+- **해결**: 템플릿 헤더만.
+
+### E-11. Functions Logs 비어 있음
+- **해결**: Webhook URL·Insert 이벤트.
 
 ---
 
 ## 19-4. 인증 / 보안
 
-### S-01. `Email signups are disabled` (관리자 로그인 화면)
-- **원인**: 13-2(3)에서 OFF — 정상.  
-- **해결**: 가입 X, 로그인만.
+### S-01. Email signups disabled
+- **정상** — 가입 OFF, 로그인만 (13장).
 
 ### S-02. 관리자 비번 분실
-- **해결**: Supabase Authentication → Users → 본인 → ⋯ → **Send password recovery**. 받은 메일에서 재설정.
+- **해결**: Auth Users → Reset password.
 
-### S-03. 키가 GitHub 에 실수로 push 됨
-- **해결**: 즉시 Supabase **Project Settings → API → Reset** 으로 키 회전. GitHub history 도 `git filter-repo` 등으로 청소(부록 D 참고).
+### S-03. 키 GitHub에 push
+- **해결**: API 키 Reset · history 정리 (D-3 참고).
 
-### S-04. 관리자 화면에서 alert(1) 뜸 (XSS)
-- **원인**: `dangerouslySetInnerHTML` 또는 raw `innerHTML` 잔여.  
-- **해결**: `App.jsx` 관리자 `innerHTML` 에 `escapeHtml` 적용 여부 확인 (17-4).
+### S-04. XSS alert
+- **해결**: 17장 `escapeHtml` · `safeSignatureSrc`.
 
-### S-05. 일반인 anon 키로 데이터 다 읽힘
-- **원인**: RLS OFF / 정책 USING (true).  
-- **해결**: 17-2 SQL 다시. 17-3 시험.
+### S-05. anon으로 데이터 유출
+- **해결**: `applications_rls_lockdown.sql`.
 
 ---
 
-## 19-5. CI / 배포 / GitHub Pages
+## 19-5. CI / Pages / 백업
 
-### C-01. Actions 빨간 X — `npm ci` 실패
-- **원인**: `package-lock.json` 누락.  
-- **해결**: `npm install` 후 lock 파일 commit.
+### C-01. npm ci 실패
+- **해결**: `package-lock.json` commit.
 
-### C-02. `Get Pages site failed`
-- **원인**: Pages Source 가 "Branch" 로 남음.  
-- **해결**: Settings → Pages → Source = **GitHub Actions**.
+### C-02. Get Pages site failed
+- **해결**: Pages Source = GitHub Actions.
 
-### C-03. 사이트 404 on assets (`/assets/index-xxx.js`)
-- **원인**: `.nojekyll` 누락 / `base` 잘못.  
-- **해결**: 워크플로우의 `.nojekyll` 생성 단계 + `vite.config.js` `base`.
+### C-03. assets 404
+- **해결**: `VITE_BASE` · `public/.nojekyll`.
 
-### C-04. push 했는데 사이트 그대로
-- **원인**: GitHub Pages CDN 캐시.  
-- **해결**: Cmd+Shift+R 하드 리프레시. 그래도 안 되면 시크릿 창.
+### C-04. push 후 사이트 안 바뀜
+- **해결**: hard refresh.
 
-### C-05. 백업 워크플로우 401
-- **원인**: `SUPABASE_SERVICE_ROLE_KEY` 오타.  
-- **해결**: Secret 다시 등록 → Re-run.
+### C-05. backup-workbook 401
+- **해결**: `SUPABASE_SERVICE_ROLE_KEY` Secret.
 
-### C-06. 백업 cron 안 돔
-- **원인**: GitHub Free 한도 / 일시 지연.  
-- **해결**: UTC 시간 + 30분 정도 지연 가능. 다음 날 다시. 또는 수동 Run.
+### C-06. backup cron 안 돔
+- **해결**: UTC 18:00 = KST 03:00 · 수동 Run.
 
 ---
 
-## 19-6. 19장 사용 팁
+## 19-6. 사용 팁
 
-- 빨간 메시지 한 줄을 **그대로** Cursor 채팅에 붙이고 "이 매뉴얼 19장 표 형식으로 원인·해결 알려줘" 하면, 카탈로그가 자동으로 더 풍부해집니다.
-- 새 에러를 만나면 이 파일에 **한 줄 추가**해 두세요. 1년 뒤 본인이 가장 고마워 합니다.
+에러 한 줄을 Cursor에 붙이고 「19장 형식으로 원인·해결」 요청.  
+새 에러는 이 파일에 **한 줄 추가**해 두세요.
 
 ---
 
-📌 **다음 장 미리보기**  
-20장은 본 매뉴얼의 **마지막 본문**.  
-시즌을 시작·끝내고 다른 사람에게 인수인계할 때 그대로 따라할 수 있는 "시즌 운영 가이드".
+📌 **관련 문서**  
+`docs/INCIDENT_RUNBOOK.md` · `docs/OPERATIONS_CHECKLIST.md` · 부록 A~D
 
 ---
 
@@ -4434,20 +4406,16 @@ Storage URL (워크플로 내부):
 
 <div class='page-break'></div>
 
-# 부록 A. 모든 SQL 한 페이지 (복붙용)
+# 부록 A. SQL 설치 순서 (레포 파일 기준)
 
-> **이 부록의 용도**  
-> 새 환경에 설치하거나, 의심스러울 때 "지금 SQL 상태가 깨끗한가?" 한 번에 다시 깔 때.  
-> **위에서 아래로 순서대로** 한 번씩 Run 하면 본 매뉴얼 시점의 DB가 똑같이 만들어집니다.  
->
-> 사용 순서: 4장 프로젝트 생성 → 이 부록 A 한 번 → 14·17장 부분만 다시 확인.
+> **용도**: 새 Supabase 프로젝트·DB 재구축·"SQL 상태가 이상할 때"  
+> **순서**: 아래 번호대로 SQL Editor에서 **파일 통째로** Run (가능하면 복붙 대신 레포 경로 확인).
 
 ---
 
-## A-0. 처음 한 번만 — 위험 명령 (이미 운영 중이면 SKIP)
+## A-0. 처음만 — 전부 삭제 (운영 데이터 있으면 SKIP)
 
 ```sql
--- 깔끔히 다시 시작할 때만. 운영 데이터 모두 사라짐.
 DROP TABLE IF EXISTS public.applications CASCADE;
 DROP TABLE IF EXISTS public.yyc_resident_registry CASCADE;
 DROP TABLE IF EXISTS public.yyc_receipt_counter CASCADE;
@@ -4456,94 +4424,38 @@ DROP FUNCTION IF EXISTS public.verify_yyc_resident(text,text,text,text);
 DROP FUNCTION IF EXISTS public.next_yyc_receipt_no();
 DROP FUNCTION IF EXISTS public.submit_application(jsonb);
 DROP FUNCTION IF EXISTS public.is_admin();
-DROP FUNCTION IF EXISTS public.list_applications();
-DROP FUNCTION IF EXISTS public.get_application(bigint);
 DROP FUNCTION IF EXISTS public.admin_clear_all_applications();
 DROP FUNCTION IF EXISTS public.admin_reset_yyc_receipt_counter();
+-- 예전 교재 RPC (있으면 제거)
+DROP FUNCTION IF EXISTS public.list_applications();
+DROP FUNCTION IF EXISTS public.get_application(bigint);
 ```
 
 ---
 
-## A-1. 등록부 + 검증 함수 (5장)
+## A-1. 입주민 등록부 + 검증 (5·7장)
 
-```sql
-CREATE TABLE IF NOT EXISTS public.yyc_resident_registry (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  dong text NOT NULL,
-  ho text NOT NULL,
-  contractor_name text NOT NULL,
-  phone_tail text NOT NULL,
-  type_key text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT yyc_resident_phone_chk CHECK (phone_tail ~ '^[0-9]{4}$'),
-  CONSTRAINT yyc_resident_unique UNIQUE (dong, ho, contractor_name, phone_tail)
-);
-ALTER TABLE public.yyc_resident_registry ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.yyc_resident_registry FROM PUBLIC;
-
-CREATE OR REPLACE FUNCTION public.verify_yyc_resident(
-  p_dong text, p_ho text, p_contractor text, p_phone_tail text
-)
-RETURNS TABLE(type_key text)
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT r.type_key FROM public.yyc_resident_registry r
-  WHERE r.dong = regexp_replace(coalesce(p_dong,''), '\D','','g')
-    AND r.ho   = regexp_replace(coalesce(p_ho,''),   '\D','','g')
-    AND r.contractor_name = trim(regexp_replace(coalesce(p_contractor,''), '\s+',' ','g'))
-    AND r.phone_tail = regexp_replace(coalesce(p_phone_tail,''), '\D','','g')
-  LIMIT 1;
-$$;
-REVOKE ALL ON FUNCTION public.verify_yyc_resident(text,text,text,text) FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.verify_yyc_resident(text,text,text,text) TO anon, authenticated;
-```
+**파일:** `supabase/sql/yyc_resident_registry.sql` 전체 Run  
+→ 이어서 `npm run db:residents-sql` 로 생성한 INSERT 실행 (5장).
 
 ---
 
-## A-2. 신청서 + 접수번호 + 저장 RPC (11장)
-
-### (1) 테이블
-
-**빈 DB:** `supabase/sql/applications_create_table.sql` 전체 Run.
-
-**옛 스키마 DB:** `supabase/sql/applications_migrate_to_current_schema.sql` Run 후 (2) 실행.
-
-<details><summary>또는 아래 SQL 직접 붙여넣기</summary>
-
-```sql
-CREATE TABLE IF NOT EXISTS public.applications (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  receipt_no text UNIQUE NOT NULL,
-  customer_name text NOT NULL DEFAULT '미입력',
-  phone text NOT NULL DEFAULT '',
-  dong text NOT NULL,
-  ho text NOT NULL,
-  unit_type text NOT NULL,
-  selected_options jsonb NOT NULL DEFAULT '[]'::jsonb,
-  selected_options_summary text,
-  total_price numeric NOT NULL DEFAULT 0,
-  signature_data_url text NOT NULL DEFAULT '',
-  printed boolean NOT NULL DEFAULT true,
-  status text NOT NULL DEFAULT '접수됨',
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.applications ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON public.applications FROM PUBLIC;
-```
-
-</details>
-
-### (2) 함수 — 레포 SQL 파일 **전체** 실행 (권장)
+## A-2. 신청 테이블 + RPC (11장)
 
 | 순서 | 파일 |
 |------|------|
-| 1 | `supabase/sql/next_yyc_receipt_no.sql` |
-| 2 | `supabase/sql/submit_application.sql` |
+| 1 | `supabase/sql/applications_create_table.sql` **또는** `applications_migrate_to_current_schema.sql` (옛 DB) |
+| 2 | `supabase/sql/next_yyc_receipt_no.sql` |
+| 3 | `supabase/sql/submit_application.sql` |
 
-앱 호출: `POST /rpc/next_yyc_receipt_no` `{}` → `POST /rpc/submit_application` `{"payload":{...}}`
+앱 호출:
+
+- `POST /rpc/next_yyc_receipt_no` body `{}`
+- `POST /rpc/submit_application` body `{"payload":{ receipt_no, customer_name, phone, dong, ho, unit_type, selected_options, total_price, signature_data_url, … }}`
 
 ---
 
-## A-3. 관리자 화이트리스트 + 조회 RPC (13장)
+## A-3. 관리자 화이트리스트 (13·17장)
 
 ```sql
 CREATE TABLE IF NOT EXISTS public.app_admins ( email text PRIMARY KEY );
@@ -4560,102 +4472,65 @@ RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
   );
 $$;
 REVOKE ALL ON FUNCTION public.is_admin() FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+```
 
-CREATE OR REPLACE FUNCTION public.list_applications()
-RETURNS TABLE(
-  id bigint, receipt_no text, customer_name text,
-  dong text, ho text, unit_type text,
-  total_amount integer, created_at timestamptz
-)
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501'; END IF;
-  RETURN QUERY
-    SELECT a.id, a.receipt_no, a.customer_name,
-           a.dong, a.ho, a.unit_type,
-           a.total_amount, a.created_at
-      FROM public.applications a
-     ORDER BY a.created_at DESC;
-END $$;
-REVOKE ALL ON FUNCTION public.list_applications() FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.list_applications() TO authenticated;
+> 현재 앱은 `list_applications` RPC 없이 **`GET /rest/v1/applications`** + RLS 로 목록 조회.
 
-CREATE OR REPLACE FUNCTION public.get_application(p_id bigint)
-RETURNS SETOF public.applications
-LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501'; END IF;
-  RETURN QUERY SELECT * FROM public.applications WHERE id = p_id;
-END $$;
-REVOKE ALL ON FUNCTION public.get_application(bigint) FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.get_application(bigint) TO authenticated;
+선택 (상태·메모 PATCH):
+
+```sql
+ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS admin_memo text;
+ALTER TABLE public.applications ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
 ```
 
 ---
 
 ## A-4. 초기화 RPC (15장)
 
-```sql
-CREATE OR REPLACE FUNCTION public.admin_clear_all_applications()
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501'; END IF;
-  TRUNCATE TABLE public.applications RESTART IDENTITY;
-  TRUNCATE TABLE public.yyc_receipt_counter;
-  INSERT INTO public.yyc_receipt_counter(id, current_no) VALUES (1, 0)
-    ON CONFLICT DO NOTHING;
-END $$;
-REVOKE ALL ON FUNCTION public.admin_clear_all_applications() FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.admin_clear_all_applications() TO authenticated;
+**파일:** `supabase/sql/admin_clear_all_applications.sql` 전체 Run
 
-CREATE OR REPLACE FUNCTION public.admin_reset_yyc_receipt_counter()
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT public.is_admin() THEN RAISE EXCEPTION 'forbidden' USING ERRCODE='42501'; END IF;
-  TRUNCATE TABLE public.yyc_receipt_counter;
-  INSERT INTO public.yyc_receipt_counter(id, current_no) VALUES (1, 0);
-END $$;
-REVOKE ALL ON FUNCTION public.admin_reset_yyc_receipt_counter() FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.admin_reset_yyc_receipt_counter() TO authenticated;
-```
+- `admin_clear_all_applications()` — TRUNCATE applications + yyc_receipt_counter  
+- `admin_reset_yyc_receipt_counter()` — 카운터만 TRUNCATE  
+
+폴백 DELETE 정책(초기화 RPC 없을 때만): `applications_delete_policy.sql`
 
 ---
 
-## A-5. 보안 최종 잠금 (17장)
+## A-5. RLS 잠금 (17장)
 
-**한 번에:** `supabase/sql/applications_rls_lockdown.sql` 전체 Run (13-3 `is_admin()` 선행).
+**파일:** `supabase/sql/applications_rls_lockdown.sql` 전체 Run (A-3 `is_admin()` 선행).
 
-- `list_applications` / `get_application` GRANT 없음 (현재 앱은 REST `applications` + RLS)
-- 느슨한 DELETE 정책(`applications_delete_policy.sql`) 은 잠금 후 **불필요** — 있으면 lockdown SQL 이 DROP
+Storage 버킷(12장): `supabase/sql/storage_application_workbook_bucket.sql` (필요 시)
 
 ---
 
-## A-6. 빠른 점검 쿼리 모음
+## A-6. 점검 쿼리
 
 ```sql
--- 신청 건수 / 평형별
 SELECT count(*) FROM public.applications;
-SELECT unit_type, count(*) FROM public.applications GROUP BY 1 ORDER BY 1;
-
--- 옵션별 매출 합계 (jsonb 풀어 보기)
-SELECT o->>'label' AS option_label,
-       sum((o->>'price')::numeric) AS total
-FROM public.applications, jsonb_array_elements(selected_options) o
-GROUP BY 1 ORDER BY 2 DESC;
-
--- 등록부 인원
+SELECT unit_type, count(*) FROM public.applications GROUP BY 1;
 SELECT count(*) FROM public.yyc_resident_registry;
-
--- 올해 접수번호 일련 (카운터)
 SELECT year, seq FROM public.yyc_receipt_counter ORDER BY year;
-
--- 관리자 명단
 SELECT * FROM public.app_admins;
-
--- (관리자로 로그인 후) 본인 인식되는지
-SELECT public.is_admin();
+SELECT public.is_admin();  -- 관리자 JWT 세션에서
 ```
+
+---
+
+## A-7. 파일 목록 한눈에
+
+| 파일 | 장 |
+|------|-----|
+| `yyc_resident_registry.sql` | 5·7 |
+| `applications_create_table.sql` | 11 |
+| `applications_migrate_to_current_schema.sql` | 11 (옛 DB) |
+| `next_yyc_receipt_no.sql` | 11 |
+| `submit_application.sql` | 11 |
+| `admin_clear_all_applications.sql` | 15 |
+| `applications_rls_lockdown.sql` | 17 |
+| `applications_delete_policy.sql` | 15 폴백 |
+| `storage_application_workbook_bucket.sql` | 12 |
 
 ---
 
@@ -4754,282 +4629,147 @@ supabase functions deploy reset-application-workbook --no-verify-jwt
 
 <div class='page-break'></div>
 
-# 부록 C. 환경변수·시크릿 전체 표 (어디에 무엇을 두는가)
-
-> **이 부록의 용도**  
-> "어떤 키를 어디에 두라고 했지?" 가 한 페이지에. 보안 사고는 80%가 '잘못된 위치에 둔 키' 에서 나옵니다.
+# 부록 C. 환경변수·시크릿 (어디에 무엇을 둘까)
 
 ---
 
-## C-1. 한눈에 보는 표
+## C-1. 표
 
-| 키 이름 | 어디에 두나 | 누가 보나 | 사용처 |
-|---------|-------------|-----------|--------|
-| **VITE_SUPABASE_URL** | `.env.local` (로컬) + GitHub Secret | 누구나 (빌드 후 클라에 박힘) | 프런트엔드 |
-| **VITE_SUPABASE_ANON_KEY** | `.env.local` + GitHub Secret | 누구나 | 프런트엔드 |
-| **VITE_BASE** | `.github/workflows/pages.yml` 의 env | 빌드 단계 | Vite base 경로 |
-| **SUPABASE_SERVICE_ROLE_KEY** | **Supabase secrets** + GitHub Secret(백업용만) | ⚠️ 개발자만 | Edge Function · 백업 워크플로우 |
-| **WORKBOOK_WEBHOOK_SECRET** | Supabase secrets + Database Webhook 헤더 | ⚠️ 개발자만 | append-workbook-row 인증 |
-| **WORKBOOK_BUCKET** | Supabase secrets | 보통 | 함수들 |
-| **WORKBOOK_OBJECT_KEY** | Supabase secrets | 보통 | 함수들 |
-| **TEMPLATE_PUBLIC_URL** | Supabase secrets | 공개 OK | reset-application-workbook |
-| **WORKBOOK_RESET_ALLOWED_EMAILS** | Supabase secrets | 보통 | sign·reset 함수 |
-| **DB Password** | 본인 메모장 (오프라인) | 본인만 | DB 직접 접속 시 |
-| **관리자(admin@admin.com) 비번** | 회사 비밀번호 금고 | 인수인계 대상 | 관리자 로그인 |
+| 키 | 위치 | 노출 | 용도 |
+|----|------|------|------|
+| `VITE_SUPABASE_URL` | `.env.local` + GitHub Secret | 빌드 후 공개 | 프런트 REST/RPC |
+| `VITE_SUPABASE_ANON_KEY` | `.env.local` + GitHub Secret | 빌드 후 공공개 | 프런트 |
+| `VITE_BASE` | `pages.yml` `/${{ repository.name }}/` | — | Vite base |
+| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Secret **만** (백업) | 비공개 | `backup-workbook.yml` |
+| `WORKBOOK_WEBHOOK_SECRET` | Supabase secrets + Webhook 헤더 | 비공개 | append-workbook-row |
+| `WORKBOOK_BUCKET` | Supabase secrets | — | Edge 3종 |
+| `WORKBOOK_OBJECT_KEY` | Supabase secrets | — | `yyc-contract-live_V1.xlsx` |
+| `TEMPLATE_PUBLIC_URL` | Supabase secrets | 공개 URL OK | reset·append 폴백 |
+| `WORKBOOK_RESET_ALLOWED_EMAILS` | Supabase secrets | — | sign·reset JWT 함수 |
 
----
+### 로컬만 (운영 기본 OFF)
 
-## C-2. 절대 두면 안 되는 위치 (자주 실수)
+| 키 | 용도 |
+|----|------|
+| `VITE_APPEND_WORKBOOK_ON_SUBMIT=1` | Webhook 대신 프런트에서 append 호출 (비권장, secret 노출) |
+| `VITE_WORKBOOK_APPEND_URL` / `VITE_WORKBOOK_APPEND_SECRET` | 위와 쌍 |
+| `VITE_ADMIN_XLS_TEMPLATE_ONLY=1` | Storage 대신 `public/templates/` 병합 디버그 |
 
-| 키 | 절대 X 위치 | 이유 |
-|----|-------------|------|
-| `SUPABASE_SERVICE_ROLE_KEY` | 코드, README, 메일, 메신저, `VITE_*` 환경변수 | DB 풀권한. 누설 즉시 모든 데이터 위험 |
-| `WORKBOOK_WEBHOOK_SECRET` | 코드, README | 웹훅 위장 가능 |
-| `DB Password` | GitHub, Slack, 메일 | DB 직접 접근 가능 |
-| 관리자 비밀번호 | 평문 메모, 공유 문서 | 어떤 백업·관리 작업도 가능 |
+`.env.example` 참고.
 
 ---
 
-## C-3. 키 회전(주기적으로 바꾸기) 체크리스트
+## C-2. 절대 넣지 말 것
 
-| 키 | 주기 | 절차 |
-|----|------|------|
-| 관리자 비번 | 분기 1회 | Supabase Auth → Users → Reset password |
-| `service_role` | 6개월 1회·노출 의심 시 즉시 | Project Settings → API → Reset → Supabase secrets · GitHub Secret 둘 다 갱신 → CI 재실행 |
-| `WORKBOOK_WEBHOOK_SECRET` | 노출 의심 시 | Supabase secrets 갱신 + Database Webhook 헤더 같은 값으로 |
-| anon key | 회전 거의 X (필요 시 가능) | Reset 후 `.env`/Secret 갱신 |
-| DB Password | 6개월 1회 | Settings → Database → Reset password (직접 접속 도구 다 갱신) |
+| 키 | 금지 위치 |
+|----|-----------|
+| `service_role` | `VITE_*`, README, 채팅 |
+| `WORKBOOK_WEBHOOK_SECRET` | 코드·Pages |
+| DB 비밀번호 | GitHub |
 
 ---
 
-## C-4. 빠른 점검 명령
+## C-3. 회전
+
+| 키 | 시점 |
+|----|------|
+| 관리자 비번 | 분기 |
+| service_role | 6개월·유출 시 → GitHub Secret + Supabase secrets |
+| WORKBOOK_WEBHOOK_SECRET | 유출 시 → secrets + Webhook 헤더 |
+
+---
+
+## C-4. 점검
 
 ```bash
-# 어떤 시크릿이 등록되어 있는지
 supabase secrets list
-
-# Edge Function 목록
 supabase functions list
-
-# 로컬 환경변수가 잡히는지
-echo $VITE_SUPABASE_URL    # zsh
 ```
 
-⚠️ Supabase secret **값 자체는 다시 못 봅니다.** 메모장 따로 보관 필수.
+Secret 값은 재조회 불가 — 별도 메모장 보관.
 
 ---
 
 <div class='page-break'></div>
 
-# 부록 D. 더 안전·확장 (선택 사항)
+# 부록 D. 확장 (선택)
 
-> **이 부록의 용도**  
-> MVP 가 끝난 후 "있으면 좋다" 항목들. 한 항목씩 필요한 것만 골라 적용.
-
----
-
-## D-1. 커스텀 도메인 붙이기 (예: `apply.example.com`)
-
-**언제 좋나**: 회사 메일 안내문에 GitHub URL 보다 자체 도메인이 보이는 게 신뢰감 ↑.
-
-1. 도메인 1개 구입 (Namecheap/가비아 등) — 보통 만 원/년대.
-2. GitHub 리포 → Settings → Pages → **Custom domain** 에 도메인 입력 → Save.
-3. 도메인 관리 페이지에서 `CNAME` 레코드 추가  
-   - 호스트: `apply` → 값: `__GITHUB_ID__.github.io`
-4. 1~30분 후 GitHub Pages 가 자동으로 HTTPS 발급.
-5. **Enforce HTTPS** 체크 On.
-6. `vite.config.js` 의 `base` 를 `'/'` 로 변경 (도메인 루트 사용 시) → push.
-
-⚠️ Supabase Auth 의 redirect URL, Edge Function CORS 가 새 도메인을 허용하는지 확인.
+> MVP 완료 후 필요한 항목만 골라 적용.
 
 ---
 
-## D-2. 입주민 인증 강도 ↑ (휴대폰 SMS OTP)
+## D-1. 커스텀 도메인
 
-**언제 좋나**: 등록부 4칸만으로 부족, "문자 인증 1회"까지 받고 싶을 때.
-
-1. Supabase Authentication → Phone provider 켜기 (Twilio/메시지 비용 발생).
-2. AI에게:
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> @App.jsx 7장 검증 통과 후 다음 단계로 가기 전에
-> 사용자가 입력한 휴대폰 풀 번호로 supabase.auth.signInWithOtp({ phone })
-> 호출 → 6자리 OTP 입력 → verifyOtp 통과해야 setStep('options').
-> 실패 시 한국어 안내. 변경 후 Apply.
-> ```
-
-⚠️ 비용·발신 한도 확인 필수. MVP 단계엔 **선택**.
+GitHub Pages → Custom domain → DNS `CNAME` → `vite` `base: '/'` (루트 도메인 시).  
+Supabase Auth redirect·CORS에 새 도메인 추가.
 
 ---
 
-## D-3. 신청 완료 시 관리자 이메일 알림
+## D-2. SMS OTP (7장 보강)
 
-**언제 좋나**: 신청이 들어오자마자 "1건 도착" 알림 받고 싶을 때.
+Supabase Phone provider + Twilio 비용.  
+게이트 통과 후 `signInWithOtp` — MVP에선 등록부 4칸으로 충분하면 생략.
 
-1. Resend ([https://resend.com](https://resend.com)) 가입 → API 키 발급 (무료 100건/일).
-2. Supabase secret 등록:
+---
+
+## D-3. 신청 시 관리자 이메일
+
+`notify-new-application` Edge Function + Resend.  
+Webhook INSERT 시 `receipt_no`, `dong`, `ho`, `customer_name`, **`total_price`** 만 본문에 (민감정보 X).
+
+---
+
+## D-4. 백업 1년 보관
+
+18장 `backup-workbook` Artifact(30일) + 시즌 종료 시 로컬 3중 보관.  
+장기: 사설 리포 `yyc-options-backups` + PAT `GH_BACKUP_TOKEN` 으로 push step 추가.
+
+---
+
+## D-5. 관리자 여러 명
+
+Email signup **OFF** 유지 · Auth Invite · `app_admins` 에 이메일 추가.  
+접속: **`#/admin`**.
+
+---
+
+## D-6. CSP 강화
+
+17-6 참고. Pretendard CDN 사용 시 `style-src`·`font-src` 에 `cdn.jsdelivr.net` 포함 필수.
+
+---
+
+## D-7. PWA
+
+`vite-plugin-pwa` — 홈 화면 추가. HTTPS Pages 필요.
+
+---
+
+## D-8. 트래픽·Pro
+
+Supabase Pro · 마감 시간 분산 안내 · backup-workbook 실패 알림.
+
+---
+
+## D-9. Slack 알림
+
+`notify-slack` + `SLACK_WEBHOOK_URL` · Webhook INSERT.  
+메시지 예: `[옵션신청] YYC-20260516001 101-1201 홍길동 5000000원`
+
+---
+
+## D-10. 매뉴얼 PDF
+
 ```bash
-supabase secrets set RESEND_API_KEY="re_xxx" \
-                     ALERT_EMAIL_TO="admin@admin.com" \
-                     ALERT_EMAIL_FROM="onboarding@resend.dev"
-```
-3. AI에게:
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> supabase/functions/notify-new-application/index.ts 를 만들어줘.
-> 동작:
-> - POST 로 webhook 호출 받기 (x-workbook-secret 인증 동일)
-> - body.record 에서 receipt_no, dong, ho, customer_name, total_amount 만 추출
-> - Resend API 로 ALERT_EMAIL_TO 에게 이메일 1통 발송
->   from: ALERT_EMAIL_FROM
->   subject: "[옵션신청] {접수번호} {동}-{호} {이름}"
->   text: 간단한 본문 (개인정보 자세히 X — 접수번호와 평형 위주)
-> verify_jwt = false. config.toml에도 추가.
-> ```
-4. Database Webhook 1개 더 만들기: applications INSERT → 위 함수 URL.
-
-⚠️ 메일 본문에 주민번호·서명 등 민감정보 X. 접수번호·평형까지만.
-
----
-
-## D-4. 백업 보관 30일 → 1년 (사설 리포 사용)
-
-**언제 좋나**: 시즌 끝난 한참 뒤 자료가 필요할 때를 대비.
-
-1. GitHub에 사설 리포 1개 만들기 (`yyc-options-backups`).
-2. 18-3 워크플로우에 단계 추가:
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> .github/workflows/backup-workbook.yml 마지막 step 다음에
-> 사설 리포 (yyc-options-backups) 의 main 브랜치로
-> backups/ 폴더 push 하는 step 을 추가해줘.
-> peaceiris/actions-gh-pages 같은 액션 대신 일반 git push 사용.
-> credentials 는 secrets.GH_BACKUP_TOKEN (Personal Access Token, repo scope) 로.
-> ```
-
-⚠️ 사설 리포는 절대 Public 으로 바꾸지 말기. 개인정보 들어 있음.
-
----
-
-## D-5. 회원 가입 막을지 / 일부 풀지
-
-본 매뉴얼은 "관리자 1명만" 기본. 만약 "여러 직원이 보는 화면" 이 필요하면:
-
-1. Authentication → Email signups **여전히 OFF**.
-2. Supabase Auth → Users → Invite 로 이메일 초대.
-3. SQL:
-```sql
-INSERT INTO public.app_admins(email)
-VALUES ('staff1@회사.com'), ('staff2@회사.com');
-```
-4. 직원도 `?admin=1` 로그인 후 화면 사용 가능.
-
-> 절대 "Email signups ON + 화이트리스트 X" 조합으로 두지 말기. 외부인이 가입만 하면 RLS 밖에서 정책 회피 시도 가능.
-
----
-
-## D-6. CSP 더 단단히 + 로깅
-
-`index.html` 의 CSP (17-6) 를 운영 단계에선 다음처럼 좁힐 수 있음.
-
-```html
-<meta http-equiv="Content-Security-Policy" content="
-  default-src 'none';
-  base-uri 'self';
-  frame-ancestors 'none';
-  form-action 'self';
-  script-src 'self';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data:;
-  font-src 'self' data:;
-  connect-src 'self' https://__PROJECT_REF__.supabase.co;
-" />
+cd yyc-options
+npm run manual:pdf
 ```
 
-→ Supabase URL 한 도메인만 허용. 외부 스크립트는 100% 차단.
-
----
-
-## D-7. 모바일 앱 만들기 (최소 변경)
-
-**언제 좋나**: "앱으로 깔아 놔야 안내하기 편함" 같은 상황.
-
-가장 빠른 길: **PWA (홈 화면에 설치)**. 별도 스토어 등록 불필요.
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> 이 Vite 앱을 PWA 로 만들어줘. vite-plugin-pwa 사용.
-> manifest 의 name 은 "○○아파트 옵션 신청", short_name 은 "옵션신청".
-> 아이콘은 public/pwa-192.png, public/pwa-512.png (자리만 잡고, 실제 이미지는 후속).
-> 오프라인 시 "인터넷 연결을 확인해 주세요" 안내 페이지 1장.
-> 변경 후 Apply.
-> ```
-
-`https://...` HTTPS 라면 Safari·Chrome 에서 "홈 화면에 추가" 로 설치됨.
-
----
-
-## D-8. 더 큰 시즌 / 동시 접속 폭증 대비
-
-- Supabase Pro 플랜 ($25/월) 으로 업그레이드: PITR 백업·동시접속·DB 크기 ↑.
-- Edge Function 의 무거운 작업(엑셀 read·write)을 가능한 짧게 (지금 코드 OK).
-- 마감 1시간 동안의 폭증이 예상되면 **마감 시간 분산 안내** (예: 동·호 끝자리별 시간대).
-- 모니터링: Supabase Logs + GitHub Actions backup 의 빈도/실패 알림 (이메일).
-
----
-
-## D-9. 운영 자동화 (Slack 알림)
-
-신청 1건마다 Slack 채널에 한 줄 알림.
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> supabase/functions/notify-slack/index.ts 를 만들어줘.
-> Webhook 으로 신청 INSERT 받기 (x-workbook-secret 인증).
-> SLACK_WEBHOOK_URL 시크릿으로 Incoming Webhook 호출.
-> 메시지: "[옵션신청] {receipt_no} 동{dong}-{ho} {customer_name} 합계 {total_amount}원"
-> verify_jwt = false. config.toml 에도 추가.
-> ```
-
-같은 webhook 에 Database Webhook 1개 더 연결.
-
----
-
-## D-10. 매뉴얼 자체 백업
-
-이 매뉴얼(`docs/*.md`) 도 운영 자산. 다음을 권장:
-
-- 모든 챕터 파일을 PDF 로 1회 export → 사내 드라이브에 보관 (전기 끊겨도 종이로 출력 가능).
-- Cursor에:
-
-> 🎯 **Cursor에 그대로 복사**  
-> ```
-> docs/ 폴더의 모든 .md 를 합쳐 docs/MANUAL-FULL.md 한 장으로 묶고,
-> 목차 자동 생성. 변경 후 Apply.
-> ```
-
-→ 그 파일 1장으로 외부에 인쇄·공유.
+통합본: `docs/manual/MANUAL-FULL.md` (`npm run manual:merge`).
 
 ---
 
 # 마치며
 
-> **여기까지 정말 수고하셨습니다.**  
-> 0장에서 "Cursor 설치" 한 줄로 시작해서, 지금은:  
-> - 사용자 사이트 (GitHub Pages)  
-> - 인터넷 엑셀(DB·Storage)  
-> - 자동 누적 엑셀 (Webhook + Edge Function)  
-> - 관리자 운영 화면 (목록·상세·다운로드·초기화)  
-> - 자동 배포 (GitHub Actions)  
-> - 보안 잠금 (RLS·XSS·Signed URL)  
-> - 운영 점검표·인수인계 문서·자동 백업  
->
-> 까지 한 세트가 본인 손으로 굴러갑니다.  
->
-> 매뉴얼은 한 번에 다 외울 필요 전혀 없어요.  
-> **막힐 때마다 "해당 장 + Cursor + 에러 메시지 한 줄"** 이 모든 답입니다.  
-> 새 시즌 1번씩 돌릴 때마다 본 매뉴얼에 본인 메모(에러·해결·팁) 를 한 줄씩 더해 두세요.  
-> 1년 뒤 본인이 가장 든든해 합니다. 화이팅.
+0~20장 + 부록으로 **신청 → DB → 피벗 엑셀 → `#/admin` → 배포·RLS·운영** 한 세트가 완성됩니다.  
+막힐 때: **해당 장 + 19장 검색 + `INCIDENT_RUNBOOK`**.
